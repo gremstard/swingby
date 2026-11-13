@@ -71,7 +71,7 @@ export class WorldView {
     this.ringGeo = new THREE.RingGeometry(0.985, 1.0, 96);
     this.wallMat = new THREE.MeshBasicMaterial({ color: 0x3a2a66, transparent: true, opacity: 0.9, side: THREE.DoubleSide });
     this.sparkGeo = new THREE.OctahedronGeometry(0.32, 0);
-    this.sparkMat = new THREE.MeshStandardMaterial({ color: 0xffd166, emissive: 0xffb000, emissiveIntensity: 1.8, roughness: 0.3 });
+    this.sparkMat = new THREE.MeshStandardMaterial({ color: 0xffd166, emissive: 0xffb000, emissiveIntensity: 1.2, roughness: 0.3 });
     this.mineGeo = new THREE.IcosahedronGeometry(0.55, 0);
     this.mineMat = new THREE.MeshStandardMaterial({ color: 0xff4060, emissive: 0xff2040, emissiveIntensity: 1.2, flatShading: true });
     this.holeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
@@ -81,7 +81,7 @@ export class WorldView {
     const g = new THREE.Group();
     for (const w of sector.wells) {
       const col = new THREE.Color().setHSL(w.hue, 0.75, 0.6);
-      const m = new THREE.Mesh(this.wellGeo, new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.9, roughness: 0.4 }));
+      const m = new THREE.Mesh(this.wellGeo, new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.28, roughness: 0.5 }));
       m.position.set(w.x, w.y, 0); m.scale.setScalar(w.r); g.add(m);
       const ring = new THREE.Mesh(this.ringGeo, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.22, side: THREE.DoubleSide }));
       ring.position.set(w.x, w.y, -0.05); ring.scale.setScalar(w.r * T.PERI_RATIO); g.add(ring);

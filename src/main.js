@@ -5,6 +5,12 @@ import { Comet } from './player.js';
 import { Input } from './input.js';
 import { CameraRig } from './camera.js';
 import { dailySeed, randomSeed } from './rng.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { Tweens, Particles, Trail, ease } from './feel.js';
+import { Audio } from './audio.js';
 
 const canvas = document.querySelector('#c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -15,6 +21,12 @@ scene.background = new THREE.Color(0x05060c);
 const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 200);
 scene.add(new THREE.AmbientLight(0x8090ff, 0.35));
 const key = new THREE.DirectionalLight(0xffffff, 1.2); key.position.set(4, 6, 10); scene.add(key);
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.55, 0.5, 0.75);
+composer.addPass(bloom); composer.addPass(new OutputPass());
+const tweens = new Tweens(); const particles = new Particles(scene); const trail = new Trail(scene); const audio = new Audio();
+const opts = { shake: localStorage.getItem('peri.shake') !== '0', flash: localStorage.getItem('peri.flash') !== '0' };
 
 // stars (parallax layer far behind)
 {
@@ -39,13 +51,14 @@ const orbitRing = new THREE.Mesh(new THREE.RingGeometry(0.98, 1.0, 128), new THR
 
 // tide: a big plane whose top edge is the tide line, plus a bright edge
 const tideMesh = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshBasicMaterial({ color: 0x1a0a2e }));
-const tideEdge = new THREE.Mesh(new THREE.PlaneGeometry(400, 0.35), new THREE.MeshBasicMaterial({ color: 0xb04bff }));
-scene.add(tideMesh, tideEdge);
+const tideEdge = new THREE.Mesh(new THREE.PlaneGeometry(400, 0.3), new THREE.MeshBasicMaterial({ color: 0xd98bff }));
+const tideGlow = new THREE.Mesh(new THREE.PlaneGeometry(400, 6), new THREE.MeshBasicMaterial({ color: 0x6a2bbf, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false }));
+scene.add(tideMesh, tideEdge, tideGlow);
 
 const hud = { h: document.querySelector('#h'), score: document.querySelector('#score'), combo: document.querySelector('#combo'), debug: document.querySelector('#debug'), card: document.querySelector('#card') };
 
 const S = { seed: dailySeed(), sectors: new Map(), wells: [], tideY: -T.TIDE_START_GAP, tideV: T.TIDE_V0, maxY: 0, score: 0, timeScale: 1, hitstop: 0, running: false, elapsed: 0, dead: false, deadAt: 0,
-  combo: 1, comboT: 0, bestCombo: 1, sparks: 0, peris: 0, best: Number(localStorage.getItem('peri.best') || 0), bestH: Number(localStorage.getItem('peri.bestH') || 0) };
+  popScale: 1, combo: 1, comboT: 0, bestCombo: 1, sparks: 0, peris: 0, best: Number(localStorage.getItem('peri.best') || 0), bestH: Number(localStorage.getItem('peri.bestH') || 0) };
 const popsEl = document.querySelector('#pops');
 const _v = new THREE.Vector3();
 function pop(text, x, y, color = '#fff') {
@@ -70,7 +83,7 @@ function ensureSectors() {
 function start(seed) {
   S.seed = seed; for (const i of [...S.sectors.keys()]) world.remove(i); S.sectors.clear();
   comet.reset(); Object.assign(S, { tideY: -T.TIDE_START_GAP, tideV: T.TIDE_V0, maxY: 0, score: 0, timeScale: 1, hitstop: 0, running: true, elapsed: 0, dead: false, combo: 1, comboT: 0, bestCombo: 1, sparks: 0, peris: 0 });
-  rig.snap(0, 4); ensureSectors(); hud.card.classList.add('hidden');
+  rig.snap(0, 4); ensureSectors(); hud.card.classList.add('hidden'); trail.reset(0, 0); cometMesh.scale.setScalar(1); audio.restart();
 }
 function die() {
   S.dead = true; S.deadAt = S.elapsed; S.running = false;
@@ -82,7 +95,15 @@ function die() {
   <div class="hint">seed <b>${S.seed}</b><br><kbd>R</kbd> retry seed &nbsp; <kbd>N</kbd> new seed</div>`;
   hud.card.classList.remove('hidden');
 }
-input.onKey = (code) => { if (code === 'KeyR') start(S.seed); if (code === 'KeyN') start(randomSeed()); };
+input.onKey = (code) => {
+  if (code === 'KeyR') start(S.seed); if (code === 'KeyN') start(randomSeed());
+  if (code === 'KeyM') audio.toggleMute();
+  if (code === 'KeyS') { opts.shake = !opts.shake; localStorage.setItem('peri.shake', opts.shake ? '1' : '0'); rig.strength = opts.shake ? 0.8 : 0; }
+  if (code === 'KeyF') { opts.flash = !opts.flash; localStorage.setItem('peri.flash', opts.flash ? '1' : '0'); }
+};
+rig.strength = opts.shake ? 0.8 : 0;
+window.addEventListener('pointerdown', () => audio.unlock(), { once: false }); window.addEventListener('keydown', () => audio.unlock());
+function flash() { if (!opts.flash) return; const el = document.createElement('div'); el.className = 'flash'; document.body.appendChild(el); setTimeout(() => el.remove(), 200); }
 
 const timer = new THREE.Timer(); timer.connect(document);
 const events = [];
@@ -127,31 +148,41 @@ function update(realDt) {
     ensureSectors();
   }
   for (const e of events) handle(e); events.length = 0;
-  rig.update(realDt, comet);
+  rig.update(realDt, comet); tweens.update(realDt); particles.update(realDt);
+  const speedK = Math.max(0, Math.min(1, (comet.speed - T.CRUISE) / (T.MAX_SPEED - T.CRUISE)));
+  audio.update(speedK, !!comet.tether, S.running ? Math.max(0, 1 - (comet.y - S.tideY) / 12) : 0);
   // views
   cometMesh.position.set(comet.x, comet.y, 0);
+  if (comet.alive) { trail.push(comet.x, comet.y, speedK); cometMesh.visible = true; }
+  // stretch along velocity with speed (visual only)
+  cometMesh.rotation.z = Math.atan2(comet.vy, comet.vx);
+  const stretch = 1 + speedK * 0.9; cometMesh.scale.set(stretch * S.popScale, (1 / Math.sqrt(stretch)) * S.popScale, S.popScale);
+  cometMesh.material.emissiveIntensity = 1.4 + speedK * 1.6;
   if (comet.tether) {
     const w = comet.tether.well; tether.visible = true; orbitRing.visible = true;
     tetherGeo.attributes.position.setXYZ(0, comet.x, comet.y, 0); tetherGeo.attributes.position.setXYZ(1, w.x, w.y, 0); tetherGeo.attributes.position.needsUpdate = true;
     orbitRing.position.set(w.x, w.y, 0.02); orbitRing.scale.setScalar(comet.tether.R);
   } else { tether.visible = false; orbitRing.visible = false; }
-  tideMesh.position.set(camera.position.x, S.tideY - 200, -0.1); tideEdge.position.set(camera.position.x, S.tideY, 0.1);
+  tideMesh.position.set(camera.position.x, S.tideY - 200, -0.1); tideEdge.position.set(camera.position.x, S.tideY, 0.1); tideGlow.position.set(camera.position.x, S.tideY - 3, 0.05); tideGlow.material.opacity = 0.3 + 0.12 * Math.sin(S.elapsed * 5);
   window.__stars.position.set(camera.position.x * 0.8, camera.position.y * 0.8, 0);
   hud.h.textContent = Math.floor(S.maxY); hud.score.textContent = S.score; hud.combo.textContent = `×${S.combo}`; hud.combo.classList.toggle('hot', S.combo >= 3);
   hud.debug.textContent = `speed ${comet.speed.toFixed(1)}  tide gap ${(comet.y - S.tideY).toFixed(1)}  tether ${comet.tether ? (comet.tether.R / comet.tether.well.r).toFixed(2) + 'R' : '-'}  wells ${S.wells.length}  ts ${S.timeScale.toFixed(2)}  seed ${S.seed}`;
 }
 function handle(e) {
   switch (e.type) {
-    case 'latch': rig.addTrauma(0.12); break;
+    case 'latch': rig.addTrauma(0.12); audio.latch(); tweens.add(0.22, (k) => { S.popScale = 1 + (1 - k) * 0.35; }, ease.outBack, 'pop'); particles.burst(comet.x, comet.y, 4, e.well.mesh.material.color, 3, 0.35, 0.35); break;
     case 'release':
-      if (e.ratio < T.PERI_RATIO) { addCombo(); const pts = T.PERI_SCORE * S.combo; S.score += pts; S.peris++; rig.addTrauma(0.35); rig.punch(1); S.timeScale = 0.05; S.hitstop = Math.max(S.hitstop, T.HITSTOP_PERI); pop(`PERIHELION +${pts}`, comet.x, comet.y, '#8fd3ff'); }
+      audio.release(Math.max(0, (comet.speed - T.CRUISE) / (T.MAX_SPEED - T.CRUISE)));
+      tweens.add(0.3, (k) => { S.popScale = 1 + (1 - k) * 0.25; }, ease.outBack, 'pop');
+      if (e.ratio < T.PERI_RATIO) { audio.perihelion(); particles.burst(comet.x, comet.y, 16, 0x8fd3ff, 9, 0.7, 0.6); addCombo(); const pts = T.PERI_SCORE * S.combo; S.score += pts; S.peris++; rig.addTrauma(0.35); rig.punch(1); S.timeScale = 0.05; S.hitstop = Math.max(S.hitstop, T.HITSTOP_PERI); pop(`PERIHELION +${pts}`, comet.x, comet.y, '#8fd3ff'); }
       break;
-    case 'spark': rig.addTrauma(0.18); pop(`+${e.pts}`, e.x, e.y, '#ffd166'); break;
-    case 'near': rig.addTrauma(0.3); S.timeScale = 0.3; S.hitstop = Math.max(S.hitstop, T.SLOWMO_NEAR); break;
-    case 'death': rig.addTrauma(0.9); S.timeScale = 0.02; S.hitstop = T.HITSTOP_DEATH; die(); break;
+    case 'spark': rig.addTrauma(0.18); audio.spark(S.combo); particles.burst(e.x, e.y, 10, 0xffd166, 7, 0.55, 0.55); tweens.add(0.25, (k) => { S.popScale = 1 + (1 - k) * 0.4; }, ease.outBack, 'pop'); pop(`+${e.pts}`, e.x, e.y, '#ffd166');
+      hud.combo.animate([{ transform: 'scale(1.5)' }, { transform: 'scale(1)' }], { duration: 220, easing: 'ease-out' }); break;
+    case 'near': rig.addTrauma(0.3); audio.near(); S.timeScale = 0.3; S.hitstop = Math.max(S.hitstop, T.SLOWMO_NEAR); particles.burst(comet.x, comet.y, 6, e.well.mesh.material.color, 4, 0.4, 0.4); break;
+    case 'death': rig.addTrauma(0.9); audio.death(); flash(); particles.burst(comet.x, comet.y, 40, 0xffe0c0, 12, 1.1, 0.8); particles.burst(comet.x, comet.y, 20, 0xff6a4a, 6, 1.4, 1.0); cometMesh.visible = false; S.timeScale = 0.02; S.hitstop = T.HITSTOP_DEATH; die(); break;
   }
 }
-renderer.setAnimationLoop(() => { timer.update(); const dt = Math.min(Math.max(timer.getDelta(), 0), 0.05); update(dt); renderer.render(scene, camera); });
-window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+renderer.setAnimationLoop(() => { timer.update(); const dt = Math.min(Math.max(timer.getDelta(), 0), 0.05); update(dt); composer.render(); });
+window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); composer.setSize(window.innerWidth, window.innerHeight); });
 start(S.seed);
-Object.assign(window, { renderer, scene, camera, S, comet, start, input, T, halfWidthAt });
+Object.assign(window, { renderer, scene, camera, S, comet, start, input, T, halfWidthAt, audio, opts });
