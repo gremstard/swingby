@@ -33,6 +33,14 @@ export const TRAILS = [
   { id: 'ghost',    name: 'Ghost',    width: 0.55, len: 30,  fx: 'none', req: { stars: 21 } },
   { id: 'nova',     name: 'Nova',     width: 0.4,  len: 160, fx: 'sparkle', req: { lvl: 12 } },
 ];
+// Shop: coins come from sparks (1 each) and clears. Cosmetics with `price` are coin-only; consumables stack.
+export const SHOP = [
+  { id: 'shield',  kind: 'item', name: 'Shield',  desc: 'survive one hit', price: 60, max: 9 },
+  { id: 'magnet',  kind: 'item', name: 'Magnet',  desc: 'double pull range for one run', price: 40, max: 9 },
+  { id: 'rose',    kind: 'skin',  price: 250 }, { id: 'halo', kind: 'skin', price: 400 }, { id: 'void', kind: 'skin', price: 600 },
+  { id: 'fire',    kind: 'trail', price: 300 }, { id: 'plasma', kind: 'trail', price: 500 }, { id: 'ghost', kind: 'trail', price: 450 },
+];
+export function coinsFor({ sparks, won, firstWin, levelDef, boss }) { return sparks + (won ? (firstWin ? 40 : 10) + levelDef.tier * 5 : 0) + (boss && won ? 60 : 0); }
 export function totalStars(profile) { return Object.values(profile.levels).reduce((a, l) => a + (l.stars || 0), 0); }
 export function meets(req, profile) { const { lvl } = levelFromXp(profile.xp); if (req.lvl && lvl < req.lvl) return false; if (req.stars && totalStars(profile) < req.stars) return false; return true; }
 export function reqText(req) { if (req.lvl) return `LEVEL ${req.lvl}`; if (req.stars) return `${req.stars} STARS`; return ''; }

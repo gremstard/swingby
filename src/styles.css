@@ -82,3 +82,16 @@ html,body{margin:0;height:100%;background:#05060c;overflow:hidden;font-family:ui
 @media (max-width:700px){#menu[data-screen="customize"]{background:linear-gradient(180deg,rgba(5,6,12,0) 0,rgba(5,6,12,0) 28%,rgba(5,6,12,.96) 42%)}#menu .panel{margin-top:40vh}}
 #hint{font-size:22px;font-weight:800;letter-spacing:.35em;bottom:22%}
 #menu[data-screen="dead"] .logo h1,#menu[data-screen="results"] .logo h1{font-size:clamp(60px,14vw,120px);letter-spacing:.05em}
+
+.coins{color:#ffd166;letter-spacing:.1em}
+.xp{grid-template-columns:auto 1fr auto auto auto}
+.grid.worlds{grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}
+#menu .wd{flex-direction:column;align-items:flex-start;min-width:0;padding:16px;gap:4px;border-color:color-mix(in srgb,var(--wc) 45%,transparent);background:linear-gradient(135deg,color-mix(in srgb,var(--wc) 14%,transparent),rgba(255,255,255,.03))}
+.wd .n{font-size:30px;opacity:.5}.wd .meta{text-align:left;width:100%}.wd .nm{font-size:16px;letter-spacing:.3em;color:var(--wc)}
+#menu .lv.boss{border-color:#ff5ab0;background:linear-gradient(135deg,rgba(255,90,176,.18),transparent)}
+.lv .tags{font-size:8px;letter-spacing:.15em;opacity:.7;color:var(--wc,#8fb4ff)}
+.price{font-size:12px;color:#ffd166;letter-spacing:.1em}
+#boss{position:absolute;top:max(70px,calc(env(safe-area-inset-top) + 56px));left:50%;transform:translateX(-50%);width:min(320px,70%);display:none;flex-direction:column;align-items:center;gap:4px;font-size:10px;letter-spacing:.3em;color:#ff5ab0}
+#boss.show{display:flex}
+#boss .bar{width:100%;height:6px;background:rgba(255,255,255,.1);border-radius:3px;overflow:hidden}#boss .fill{height:100%;background:linear-gradient(90deg,#ff5ab0,#fff);transition:width .3s}
+#shield{position:absolute;top:max(14px,env(safe-area-inset-top));right:16px;font-size:11px;letter-spacing:.2em;color:#8fd3ff;opacity:.9}

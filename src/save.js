@@ -5,7 +5,7 @@ const DEFAULT = () => ({
   levels: {},                       // id -> { stars, bestScore, completed, bestSparks, bestPeris }
   endless: { best: 0, bestH: 0 }, daily: { date: '', best: 0 },
   settings: { shake: true, flash: true, mute: false, reduceMotion: false },
-  stats: { runs: 0, deaths: 0, sparks: 0, peris: 0, height: 0 }, firstRun: true, tutorialDone: false,
+  stats: { runs: 0, deaths: 0, sparks: 0, peris: 0, height: 0 }, firstRun: true, tutorialDone: false, coins: 0, items: { shield: 0, magnet: 0 }, bossesBeaten: [],
 });
 export function loadProfile() {
   let p;
@@ -19,6 +19,7 @@ export function loadProfile() {
   // fill missing keys from DEFAULT (forward-compatible)
   const d = DEFAULT(); for (const k of Object.keys(d)) if (p[k] === undefined) p[k] = d[k];
   for (const k of Object.keys(d.settings)) if (p.settings[k] === undefined) p.settings[k] = d.settings[k];
+  for (const k of Object.keys(d.items)) if (p.items[k] === undefined) p.items[k] = 0;
   return p;
 }
 export function saveProfile(p) { try { localStorage.setItem(KEY, JSON.stringify(p)); } catch {} }

@@ -6,7 +6,10 @@ Built with three.js r187 + Vite, no art or audio assets (everything is procedura
 
 ## What's in it
 
-- **12 authored levels** with a finish gate and three stars each (clear, spark quota, perihelion quota), unlocked sequentially.
+- **4 worlds, 24 levels.** Dawn, Ember, Abyss, Zenith: each world has a colour theme, a signature modifier set, and ends in a **boss** (a giant armed well that sheds mine rings; collect its orbiting cores to break it and open the next world).
+- **Level modifiers**: drifting wells, sideways wind (gravity), spike rows with one gap, portal pairs, no-walls wrap-around, mines, sweepers, singularities.
+- **Coins and a shop**: sparks and clears pay coins; buy a one-hit Shield or a Magnet for the next run, or coin-only cosmetics.
+- **First launch** goes straight into level 1 with the as-you-go tutorial; no menu until you've flown.
 - **Endless** with a random seed and **Daily** with the shared UTC-date seed.
 - **XP and player level**, 9 comet skins and 6 trails unlocked by level or by total stars. Cosmetics only, never power.
 - **Profile** saved locally and versioned, with settings for shake, flashes, reduce motion and mute.

@@ -8,7 +8,8 @@ export function genSector(runSeed, idx, prevWells, P) {
   const y0 = idx * T.SECTOR_H, y1 = y0 + T.SECTOR_H;
   const halfW = P.halfW;
   const wells = [];
-  if (P.empty) return { idx, y0, y1, halfW, wells, mines: [], sweepers: [], holes: [], sparks: [] };
+  if (P.empty) return { idx, y0, y1, halfW, wells, mines: [], sweepers: [], holes: [], sparks: [], spikes: [], portals: [], boss: null };
+  if (P.boss) return genBoss(rng, idx, y0, y1, halfW, P);
   const n = P.wells;
   const all = [...prevWells];
   let tries = 0;
@@ -22,7 +23,8 @@ export function genSector(runSeed, idx, prevWells, P) {
       if (d < w.r + r + T.WELL_GAP) { ok = false; break; }
     }
     if (!ok) continue;
-    const w = { x, y, r, hue: P.hue == null ? rng.range(0.52, 0.72) : (P.hue + rng.range(-0.06, 0.06) + 1) % 1, spin: rng.range(-1, 1) };
+    const w = { x, y, r, hue: P.hue == null ? rng.range(0.52, 0.72) : (P.hue + rng.range(-0.06, 0.06) + 1) % 1, spin: rng.range(-1, 1), x0: x, y0: y };
+    if (P.moving > 0 && rng.chance(P.moving)) { const amp = Math.min(rng.range(1.5, 4), halfW - r - 1.2 - Math.abs(x)); if (amp > 0.8) w.motion = { ax: amp, ay: rng.chance(0.3) ? rng.range(0.5, 1.5) : 0, w: rng.range(0.4, 0.9), ph: rng.range(0, 6.28) }; }
     wells.push(w); all.push(w);
   }
   // hazards
@@ -62,7 +64,42 @@ export function genSector(runSeed, idx, prevWells, P) {
     if (sparks.some(s => Math.hypot(s.x - x, s.y - y) < 1.4)) continue;
     sparks.push({ x, y, got: false, phase: rng.range(0, 6.28) });
   }
-  return { idx, y0, y1, halfW, wells, mines, sweepers, holes, sparks };
+  // spikes: a row of spikes across the corridor with one gap, the gap always reachable (>= 5 wide)
+  const spikes = [];
+  for (let k = 0; k < (P.spikes || 0); k++) {
+    const y = y0 + P.startPad + 8 + (k + 0.5) * ((T.SECTOR_H - P.startPad - 10) / P.spikes) + rng.range(-3, 3);
+    if (all.some(w => Math.abs(w.y - y) < w.r + 1.6 && !sparks.length)) continue;
+    const gapW = rng.range(5.5, 8), gapX = rng.range(-halfW + gapW / 2 + 1, halfW - gapW / 2 - 1);
+    spikes.push({ y, gapX, gapW, halfW });
+    for (const w of all) if (Math.abs(w.y - y) < w.r + 1.2) { spikes.pop(); break; }
+  }
+  // portals: entrance low, exit higher, velocity preserved
+  const portals = [];
+  for (let k = 0; k < (P.portals || 0); k++) {
+    let a, b, tries2 = 0;
+    while (tries2++ < 60) {
+      a = { x: rng.range(-halfW + 2, halfW - 2), y: rng.range(y0 + P.startPad + 2, y0 + T.SECTOR_H * 0.45) };
+      b = { x: rng.range(-halfW + 2, halfW - 2), y: rng.range(y0 + T.SECTOR_H * 0.55, y1 - 3) };
+      const clear = (q) => !all.some(w => Math.hypot(w.x - q.x, w.y - q.y) < w.r + 2.2) && !mines.some(m => Math.hypot(m.x - q.x, m.y - q.y) < 2.5);
+      if (clear(a) && clear(b)) { portals.push({ a, b, r: 1.1, hue: rng.range(0, 1) }); break; }
+    }
+  }
+  return { idx, y0, y1, halfW, wells, mines, sweepers, holes, sparks, spikes, portals, boss: null };
+}
+
+// Boss arena: one giant well mid-sector, armed with sweepers, that sheds mine rings. Collect its orbiting
+// cores to break it. Deterministic like everything else.
+function genBoss(rng, idx, y0, y1, halfW, P) {
+  const cy = y0 + T.SECTOR_H * 0.5, r = 3.6;
+  const boss = { x: 0, y: cy, r, hue: P.hue, x0: 0, y0: cy, boss: true, hp: 0, cores: [], phase: 0, t: 0, coresTotal: 5 + Math.min(3, idx) };
+  const sweepers = []; const n = 2 + Math.min(2, Math.floor(idx / 2));
+  for (let i = 0; i < n; i++) sweepers.push({ well: boss, len: r * 1.6, w: (i % 2 ? -1 : 1) * rng.range(0.5, 0.8), a: i * (6.28 / n), thick: 0.32 });
+  for (let i = 0; i < boss.coresTotal; i++) boss.cores.push({ a: i * (6.28 / boss.coresTotal), R: r * rng.range(1.9, 2.5), spd: rng.range(0.25, 0.45) * (i % 2 ? -1 : 1), got: false, x: 0, y: 0, got: false, phase: rng.range(0, 6.28) });
+  // helper wells around the arena so the player always has something to swing from
+  const wells = [boss]; const helpers = 4;
+  for (let i = 0; i < helpers; i++) { const a = i * 6.28 / helpers + 0.78; const d = r * 3.4; const hx = Math.max(-halfW + 2.2, Math.min(halfW - 2.2, Math.cos(a) * d)); wells.push({ x: hx, y: cy + Math.sin(a) * d, r: 1.1, hue: P.hue, x0: hx, y0: cy + Math.sin(a) * d, spin: 0 }); }
+  const sparks = []; for (let i = 0; i < 6; i++) { const a = rng.range(0, 6.28), d = r * rng.range(3.0, 3.8); sparks.push({ x: Math.max(-halfW + 1, Math.min(halfW - 1, Math.cos(a) * d)), y: cy + Math.sin(a) * d, got: false, phase: rng.range(0, 6.28) }); }
+  return { idx, y0, y1, halfW, wells, mines: [], sweepers, holes: [], sparks, spikes: [], portals: [], boss };
 }
 export function halfWidthAt(idx) {
   return Math.max(T.HALF_W_MIN, T.HALF_W0 - idx * T.HALF_W_SHRINK);
@@ -84,6 +121,9 @@ export class WorldView {
     this.mineMat = new THREE.MeshStandardMaterial({ color: 0xff4060, emissive: 0xff2040, emissiveIntensity: 1.2, flatShading: true });
     this.holeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
     this.holeRingMat = new THREE.MeshBasicMaterial({ color: 0xb04bff, transparent: true, opacity: 0.6, side: THREE.DoubleSide });
+    this.spikeGeo = new THREE.ConeGeometry(0.32, 0.9, 4); this.spikeMat = new THREE.MeshStandardMaterial({ color: 0xff6a4a, emissive: 0xff3020, emissiveIntensity: 0.9, flatShading: true });
+    this.coreGeo = new THREE.OctahedronGeometry(0.45, 0); this.coreMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xff5ab0, emissiveIntensity: 2.2 });
+    this.dynamic = []; // objects that move every frame
   }
   add(sector) {
     const g = new THREE.Group();
@@ -95,7 +135,21 @@ export class WorldView {
       ring.position.set(w.x, w.y, -0.05); ring.scale.setScalar(w.r * T.PERI_RATIO); g.add(ring);
       const reach = new THREE.Mesh(this.ringGeo, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.07, side: THREE.DoubleSide }));
       reach.position.set(w.x, w.y, -0.06); reach.scale.setScalar(w.r + T.REACH); g.add(reach);
-      w.mesh = m;
+      w.mesh = m; w.rings = [ring, reach];
+      if (w.motion) this.dynamic.push(w);
+      if (w.boss) { m.material.emissiveIntensity = 0.5; const halo = new THREE.Mesh(this.ringGeo, new THREE.MeshBasicMaterial({ color: 0xff5ab0, transparent: true, opacity: 0.35, side: THREE.DoubleSide })); halo.position.set(w.x, w.y, -0.04); halo.scale.setScalar(w.r * 1.1); g.add(halo); w.halo = halo;
+        for (const c of w.cores) { const cm = new THREE.Mesh(this.coreGeo, this.coreMat); g.add(cm); c.mesh = cm; } }
+    }
+    for (const sp of sector.spikes) {
+      const row = new THREE.Group(); row.position.set(0, sp.y, 0);
+      for (let x = -sp.halfW + 0.4; x < sp.halfW; x += 0.8) { if (Math.abs(x - sp.gapX) < sp.gapW / 2) continue; const m = new THREE.Mesh(this.spikeGeo, this.spikeMat); m.position.set(x, 0, 0); m.rotation.z = (x < sp.gapX ? 1 : -1) * 0; g.add(row); row.add(m); }
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(sp.halfW * 2, 0.18, 0.3), this.spikeMat); row.add(bar); g.add(row); sp.mesh = row;
+    }
+    for (const pt of sector.portals) {
+      const col = new THREE.Color().setHSL(pt.hue, 0.9, 0.6);
+      for (const end of [pt.a, pt.b]) { const ring = new THREE.Mesh(new THREE.TorusGeometry(pt.r, 0.14, 10, 40), new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 1.6 })); ring.position.set(end.x, end.y, 0); g.add(ring); end.mesh = ring; end.col = col;
+        const disc = new THREE.Mesh(new THREE.CircleGeometry(pt.r * 0.9, 32), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, depthWrite: false })); disc.position.set(end.x, end.y, -0.05); g.add(disc); end.disc = disc; }
+      pt.mesh = pt.a.mesh;
     }
     for (const sp of sector.sparks) { const m = new THREE.Mesh(this.sparkGeo, this.sparkMat); m.position.set(sp.x, sp.y, 0); g.add(m); sp.mesh = m; }
     for (const mn of sector.mines) { const m = new THREE.Mesh(this.mineGeo, this.mineMat); m.position.set(mn.x, mn.y, 0); g.add(m); mn.mesh = m; }
@@ -111,16 +165,25 @@ export class WorldView {
       const ring2 = new THREE.Mesh(this.ringGeo, new THREE.MeshBasicMaterial({ color: 0xb04bff, transparent: true, opacity: 0.12, side: THREE.DoubleSide })); ring2.position.set(h.x, h.y, -0.06); ring2.scale.setScalar(6); g.add(ring2);
     }
     // void walls
+    if (sector.halfW >= 50) { this.group.add(g); this.sectors.set(sector.idx, g); return; } // wrap levels: no walls
     const extra = sector.idx === 0 ? 80 : 0; // first sector's walls also cover the space below the start
     const wallGeo = new THREE.PlaneGeometry(40, T.SECTOR_H + extra);
     const l = new THREE.Mesh(wallGeo, this.wallMat); l.position.set(-sector.halfW - 20, sector.y0 - extra / 2 + T.SECTOR_H / 2, -0.2); g.add(l);
     const r = new THREE.Mesh(wallGeo, this.wallMat); r.position.set(sector.halfW + 20, sector.y0 - extra / 2 + T.SECTOR_H / 2, -0.2); g.add(r);
-    this.group.add(g);
+    g.userData.sector = sector; this.group.add(g);
     this.sectors.set(sector.idx, g);
+  }
+  // Moving wells, boss cores, portal spin. Called every gameplay frame with scaled dt.
+  update(dt, t) {
+    for (const w of this.dynamic) {
+      if (!w.motion) continue; const m = w.motion; w.x = w.x0 + Math.sin(t * m.w + m.ph) * m.ax; w.y = w.y0 + Math.sin(t * m.w * 0.7 + m.ph) * m.ay;
+      w.mesh.position.set(w.x, w.y, 0); for (const r of w.rings) r.position.set(w.x, w.y, r.position.z);
+    }
   }
   remove(idx) {
     const g = this.sectors.get(idx); if (!g) return;
-    const shared = new Set([this.wellGeo, this.ringGeo, this.sparkGeo, this.mineGeo, this.sparkMat, this.mineMat, this.wallMat, this.holeMat, this.holeRingMat]);
+    const sec = g.userData.sector; if (sec) this.dynamic = this.dynamic.filter(w => !sec.wells.includes(w));
+    const shared = new Set([this.wellGeo, this.ringGeo, this.sparkGeo, this.mineGeo, this.sparkMat, this.mineMat, this.wallMat, this.holeMat, this.holeRingMat, this.spikeGeo, this.spikeMat, this.coreGeo, this.coreMat]);
     g.traverse((o) => { if (!o.isMesh) return; if (!shared.has(o.geometry)) o.geometry.dispose(); if (!shared.has(o.material)) o.material.dispose(); });
     this.group.remove(g); this.sectors.delete(idx);
   }
