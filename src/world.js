@@ -33,10 +33,11 @@ export function genSector(runSeed, idx, prevWells, P) {
   tries = 0;
   while (mines.length < nm && tries++ < 300) {
     const x = rng.range(-halfW + 1, halfW - 1), y = rng.range(y0 + P.startPad + 6, y1 - 1);
-    if (all.some(w => Math.hypot(w.x - x, w.y - y) < w.r + 2.2) || mines.some(m => Math.hypot(m.x - x, m.y - y) < 3)) continue;
+    const clear = P.hazardClear === false ? 3.2 : T.REACH + 1.0;
+    if (all.some(w => Math.hypot(w.x - x, w.y - y) < w.r + clear) || mines.some(m => Math.hypot(m.x - x, m.y - y) < 3)) continue;
     mines.push({ x, y, r: 0.55 });
   }
-  for (const w of wells) if (P.sweeperP > 0 && rng.chance(P.sweeperP)) sweepers.push({ well: w, len: w.r * 2.4, w: rng.pick([-1, 1]) * rng.range(0.9, 1.6), a: rng.range(0, 6.28), thick: 0.28 });
+  for (const w of wells) if (P.sweeperP > 0 && rng.chance(P.sweeperP)) sweepers.push({ well: w, len: w.r * 1.3, w: rng.pick([-1, 1]) * rng.range(0.7, 1.2), a: rng.range(0, 6.28), thick: 0.28 });
   if (P.holeP > 0 && rng.chance(P.holeP)) {
     tries = 0;
     while (holes.length < 1 && tries++ < 200) {
@@ -90,15 +91,18 @@ export function genSector(runSeed, idx, prevWells, P) {
 // Boss arena: one giant well mid-sector, armed with sweepers, that sheds mine rings. Collect its orbiting
 // cores to break it. Deterministic like everything else.
 function genBoss(rng, idx, y0, y1, halfW, P) {
-  const cy = y0 + T.SECTOR_H * 0.5, r = 3.6;
-  const boss = { x: 0, y: cy, r, hue: P.hue, x0: 0, y0: cy, boss: true, hp: 0, cores: [], phase: 0, t: 0, coresTotal: 5 + Math.min(3, idx) };
-  const sweepers = []; const n = 2 + Math.min(2, Math.floor(idx / 2));
-  for (let i = 0; i < n; i++) sweepers.push({ well: boss, len: r * 1.6, w: (i % 2 ? -1 : 1) * rng.range(0.5, 0.8), a: i * (6.28 / n), thick: 0.32 });
-  for (let i = 0; i < boss.coresTotal; i++) boss.cores.push({ a: i * (6.28 / boss.coresTotal), R: r * rng.range(1.9, 2.5), spd: rng.range(0.25, 0.45) * (i % 2 ? -1 : 1), got: false, x: 0, y: 0, got: false, phase: rng.range(0, 6.28) });
-  // helper wells around the arena so the player always has something to swing from
-  const wells = [boss]; const helpers = 4;
-  for (let i = 0; i < helpers; i++) { const a = i * 6.28 / helpers + 0.78; const d = r * 3.4; const hx = Math.max(-halfW + 2.2, Math.min(halfW - 2.2, Math.cos(a) * d)); wells.push({ x: hx, y: cy + Math.sin(a) * d, r: 1.1, hue: P.hue, x0: hx, y0: cy + Math.sin(a) * d, spin: 0 }); }
-  const sparks = []; for (let i = 0; i < 6; i++) { const a = rng.range(0, 6.28), d = r * rng.range(3.0, 3.8); sparks.push({ x: Math.max(-halfW + 1, Math.min(halfW - 1, Math.cos(a) * d)), y: cy + Math.sin(a) * d, got: false, phase: rng.range(0, 6.28) }); }
+  const cy = y0 + T.SECTOR_H * 0.5, r = 3.4;
+  const coresTotal = 2 + (P.tier || 2);
+  const boss = { x: 0, y: cy, r, hue: P.hue, x0: 0, y0: cy, boss: true, hp: 0, cores: [], phase: 0, t: 0, coresTotal, killR: r * 1.75 };
+  // arms reach killR; cores orbit just outside it and inside tether reach (r + REACH), so an orbit at
+  // the right radius threads between the arms and the cores. Closer than killR = death, and it's drawn.
+  const sweepers = []; const n = 2 + Math.min(2, Math.floor((P.tier || 2) / 2));
+  for (let i = 0; i < n; i++) sweepers.push({ well: boss, len: boss.killR - r, w: (i % 2 ? -1 : 1) * rng.range(0.35, 0.55), a: i * (6.28 / n), thick: 0.32 });
+  for (let i = 0; i < coresTotal; i++) boss.cores.push({ a: i * (6.28 / coresTotal), R: rng.range(boss.killR + 1.3, r + T.REACH - 0.6), spd: rng.range(0.2, 0.35) * (i % 2 ? -1 : 1), got: false, x: 0, y: 0, phase: rng.range(0, 6.28) });
+  // helper wells well outside the arms (and outside any orbit that could swing into them)
+  const wells = [boss]; const safe = boss.killR + T.REACH + 2.5;
+  for (const [hx, hy] of [[-halfW + 2.4, cy - safe * 0.85], [halfW - 2.4, cy - safe * 0.85], [-halfW + 2.4, cy + safe * 0.9], [halfW - 2.4, cy + safe * 0.9]]) wells.push({ x: hx, y: hy, r: 1.1, hue: P.hue, x0: hx, y0: hy, spin: 0 });
+  const sparks = []; for (let i = 0; i < 6; i++) { const a = rng.range(0, 6.28), d = rng.range(boss.killR + 4, boss.killR + 8); sparks.push({ x: Math.max(-halfW + 1, Math.min(halfW - 1, Math.cos(a) * d)), y: cy + Math.sin(a) * d, got: false, phase: rng.range(0, 6.28) }); }
   return { idx, y0, y1, halfW, wells, mines: [], sweepers, holes: [], sparks, spikes: [], portals: [], boss };
 }
 export function halfWidthAt(idx) {
@@ -153,7 +157,10 @@ export class WorldView {
     }
     for (const sp of sector.sparks) { const m = new THREE.Mesh(this.sparkGeo, this.sparkMat); m.position.set(sp.x, sp.y, 0); g.add(m); sp.mesh = m; }
     for (const mn of sector.mines) { const m = new THREE.Mesh(this.mineGeo, this.mineMat); m.position.set(mn.x, mn.y, 0); g.add(m); mn.mesh = m; }
+    const dangerDone = new Set();
     for (const sw of sector.sweepers) {
+      if (!dangerDone.has(sw.well)) { dangerDone.add(sw.well); const kr = sw.well.r + sw.len + 0.5; const dz = new THREE.Mesh(new THREE.RingGeometry(0.94, 1.0, 96), new THREE.MeshBasicMaterial({ color: 0xff4060, transparent: true, opacity: 0.45, side: THREE.DoubleSide })); dz.position.set(sw.well.x, sw.well.y, -0.03); dz.scale.setScalar(kr); g.add(dz); (sw.well.rings ||= []).push(dz);
+        const fill = new THREE.Mesh(new THREE.CircleGeometry(kr, 64), new THREE.MeshBasicMaterial({ color: 0xff4060, transparent: true, opacity: 0.06, depthWrite: false })); fill.position.set(sw.well.x, sw.well.y, -0.07); g.add(fill); sw.well.rings.push(fill); }
       const m = new THREE.Mesh(new THREE.BoxGeometry(sw.len, sw.thick, 0.3), new THREE.MeshStandardMaterial({ color: 0xff4060, emissive: 0xff2040, emissiveIntensity: 1.1 }));
       m.position.set(sw.well.x, sw.well.y, 0.15); g.add(m); sw.mesh = m;
       // offset so the arm extends outward from the well's surface

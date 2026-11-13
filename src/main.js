@@ -226,6 +226,16 @@ hud.debug.style.display = 'none';
 const timer = new THREE.Timer(); timer.connect(document);
 const events = [];
 function addCombo() { S.combo = Math.min(T.COMBO_MAX, S.combo + 1); S.comboT = T.COMBO_WINDOW; S.bestCombo = Math.max(S.bestCombo, S.combo); }
+// Nudge the release direction toward a nearby spark (or straight up) when it's already close. Never more than a few degrees.
+function aimAssist() {
+  const sp = Math.hypot(comet.vx, comet.vy) || 1; let ux = comet.vx / sp, uy = comet.vy / sp; const lim = T.AIM_ASSIST_DEG * Math.PI / 180;
+  let best = null, bd = lim;
+  const consider = (tx, ty) => { const d = Math.hypot(tx, ty) || 1; const ang = Math.acos(Math.max(-1, Math.min(1, (ux * tx + uy * ty) / d))); if (ang < bd) { bd = ang; best = [tx / d, ty / d]; } };
+  for (const s of S.sparks_) if (!s.got && Math.hypot(s.x - comet.x, s.y - comet.y) < T.AIM_ASSIST_RANGE) consider(s.x - comet.x, s.y - comet.y);
+  if (S.boss && !S.boss.dead) for (const c of S.boss.cores) if (!c.got) consider(c.x - comet.x, c.y - comet.y);
+  if (!best) consider(0, 1);
+  if (best) { comet.vx = best[0] * sp; comet.vy = best[1] * sp; }
+}
 function kill(cause) {
   if (!comet.alive || S.invuln > 0) return;
   const shieldable = !/TIDE|VOID/.test(cause);
@@ -238,6 +248,7 @@ function kill(cause) {
 }
 function update(realDt) {
   if (S.hitstop > 0) { S.hitstop -= realDt; if (S.hitstop <= 0) S.timeScale = 1; }
+  else if (S.running && !S.tut) { const k = Math.max(0, Math.min(1, (comet.speed - T.CRUISE) / (T.MAX_SPEED - T.CRUISE))); const target = comet.tether ? 1 - (1 - T.ORBIT_SLOWMO) * k : 1; S.timeScale += (target - S.timeScale) * Math.min(1, realDt * 10); }
   if (S.won) { /* keep clear slow-mo */ }
   const dt = realDt * S.timeScale;
   const inp = input.consume();
@@ -246,7 +257,7 @@ function update(realDt) {
     tutorial(dt);
     comet.wantTether = inp.held;
     if (inp.pressed && !comet.tether) { const w = comet.nearestReachable(S.wells); if (w) { comet.latch(w); events.push({ type: 'latch', well: w }); } }
-    if (inp.released && comet.tether) { const r = comet.release(); events.push({ type: 'release', ...r }); }
+    if (inp.released && comet.tether) { const r = comet.release(); aimAssist(); events.push({ type: 'release', ...r }); }
     if (S.invuln > 0) S.invuln -= dt; S.gameT += dt; world.update(dt, S.gameT); if (S.portalCd > 0) S.portalCd -= dt;
     if (S.mods.gravity && !comet.tether) { comet.vx += S.mods.gravity * dt; const sp = Math.hypot(comet.vx, comet.vy) || 1; comet.vx *= comet.speed / sp; comet.vy *= comet.speed / sp; }
     comet.step(dt, S.wells, events, S.holes);
@@ -282,7 +293,7 @@ function update(realDt) {
     const gap = comet.y - S.tideY; const rubber = gap > T.TIDE_MAX_GAP ? (gap - T.TIDE_MAX_GAP) * 0.8 : 0;
     S.tideY += (S.tideV + rubber) * dt;
     if (comet.y < S.tideY) kill('SWALLOWED BY THE TIDE');
-    if (comet.y > S.maxY) { const a = Math.floor(S.maxY), b = Math.floor(comet.y); S.score += (b - a) * T.HEIGHT_SCORE; S.maxY = comet.y; }
+    if (comet.y > S.maxY) { const a = Math.floor(S.maxY), b = Math.floor(comet.y); const spk = Math.max(0, (comet.speed - T.CRUISE) / (T.MAX_SPEED - T.CRUISE)); S.score += Math.round((b - a) * T.HEIGHT_SCORE * (1 + spk * 2)); S.maxY = comet.y; }
     if (comet.alive && comet.y >= S.finishY && !(S.boss && !S.boss.dead)) events.push({ type: 'win' });
     if (S.boss && !S.boss.dead && comet.y > S.boss.y + T.SECTOR_H * 0.42) { comet.vy = -Math.abs(comet.vy); comet.y = S.boss.y + T.SECTOR_H * 0.42; } // arena ceiling until the boss falls
     ensureSectors();
@@ -333,10 +344,10 @@ function bossStep(dt) {
   if (b.hp >= b.coresTotal) { b.dead = true; events.push({ type: 'bossdead' }); }
   // live mines shed by the boss
   for (let i = S.tempMines.length - 1; i >= 0; i--) { const m = S.tempMines[i]; m.life -= dt; m.x += m.vx * dt; m.y += m.vy * dt; m.vx *= 1 - 0.6 * dt; m.vy *= 1 - 0.6 * dt; m.mesh.position.set(m.x, m.y, 0); m.mesh.rotation.y += dt * 3;
-    if (comet.alive && Math.hypot(m.x - comet.x, m.y - comet.y) < 0.95) { kill('STRUCK A MINE'); }
+    if (comet.alive && m.life < 2.85 && Math.hypot(m.x - comet.x, m.y - comet.y) < 0.95) { kill('STRUCK A MINE'); }
     if (m.life <= 0) { scene.remove(m.mesh); S.tempMines.splice(i, 1); } }
 }
-function shedMines(b, n) { for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2 + b.t; const mesh = new THREE.Mesh(world.mineGeo, world.mineMat); scene.add(mesh); S.tempMines.push({ x: b.x + Math.cos(a) * (b.r + 0.8), y: b.y + Math.sin(a) * (b.r + 0.8), vx: Math.cos(a) * 7, vy: Math.sin(a) * 7, life: 4.5, mesh }); } }
+function shedMines(b, n) { for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2 + b.t; const mesh = new THREE.Mesh(world.mineGeo, world.mineMat); scene.add(mesh); S.tempMines.push({ x: b.x + Math.cos(a) * (b.r + 0.8), y: b.y + Math.sin(a) * (b.r + 0.8), vx: Math.cos(a) * 4.5, vy: Math.sin(a) * 4.5, life: 3.2, mesh }); } }
 function handle(e) {
   switch (e.type) {
     case 'latch': haptic.light(); rig.addTrauma(0.12); audio.latch(); tweens.add(0.22, (k) => { S.popScale = 1 + (1 - k) * 0.35; }, ease.outBack, 'pop'); particles.burst(comet.x, comet.y, 4, e.well.mesh.material.color, 3, 0.35, 0.35); break;
@@ -360,7 +371,7 @@ function handle(e) {
     case 'portal': haptic.light(); audio.whoosh(0.3, { from: 300, to: 2400, vol: 0.2 }); shock.spawn(e.from.x, e.from.y, { r: 3, dur: 0.35, color: e.from.col }); shock.spawn(e.to.x, e.to.y, { r: 4, dur: 0.45, color: e.to.col }); kick(0.3); trail.reset(comet.x, comet.y); break;
     case 'shield': haptic.heavy(); audio.near(); shock.spawn(comet.x, comet.y, { r: 6, dur: 0.5, color: 0x8fd3ff }); particles.burst(comet.x, comet.y, 30, 0x8fd3ff, 9, 0.7, 0.6); kick(0.6); flash('rgb(143,211,255)', 140); rig.addTrauma(0.5); S.timeScale = 0.2; S.hitstop = 0.25; pop('SHIELD', comet.x, comet.y + 1, '#8fd3ff', true); break;
     case 'core': haptic.medium(); audio.perihelion(); particles.burst(e.x, e.y, 24, 0xff5ab0, 9, 0.7, 0.6); shock.spawn(e.x, e.y, { r: 5, dur: 0.5, color: 0xff5ab0 }); kick(0.5); rig.addTrauma(0.4); addCombo(); S.score += 40 * S.combo; pop(`CORE ${S.boss.hp}/${S.boss.coresTotal}`, e.x, e.y, '#ff5ab0', true);
-      shedMines(S.boss, 4 + S.boss.hp); shock.spawn(S.boss.x, S.boss.y, { r: S.boss.r * 4, dur: 0.8, color: 0xff5ab0, opacity: 0.6 }); break;
+      shedMines(S.boss, 3 + Math.floor(S.boss.hp / 2)); shock.spawn(S.boss.x, S.boss.y, { r: S.boss.r * 4, dur: 0.8, color: 0xff5ab0, opacity: 0.6 }); break;
     case 'bossdead': { const b = S.boss; haptic.success(); audio.death(); audio.perihelion(); flash('rgb(255,90,176)', 300); kick(1.5); rig.addTrauma(1); S.timeScale = 0.1; S.hitstop = 0.7;
       particles.burst(b.x, b.y, 160, 0xffffff, 18, 1.6, 1.0); particles.burst(b.x, b.y, 120, 0xff5ab0, 10, 2.2, 1.2);
       for (let i = 0; i < 5; i++) tweens.add(0.1 * i + 0.01, (k) => { if (k >= 1) shock.spawn(b.x, b.y, { r: 10 + i * 7, dur: 1 + i * 0.2, color: i % 2 ? 0xffffff : 0xff5ab0 }); });

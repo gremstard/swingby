@@ -1,34 +1,6 @@
 # Hand-off prompts for the other machines
 
-Repo: https://github.com/gremstard/swingby (private). Both prompts assume Claude Code is running on that machine.
-
----
-
-## Windows machine — build the Windows installer and publish a release
-
-```
-You are building and releasing the Windows version of SWINGBY, a one-button arcade game (three.js web app wrapped with Tauri 2).
-
-Repo: https://github.com/gremstard/swingby (private, owner gremstard).
-Run `gh auth status` first. If you are signed in as gremstard, clone it directly. If you are signed in as a different account, run `gh repo fork gremstard/swingby --clone` and work in the fork (you need read access to the original; ask me to invite you if the fork fails). Do all work on a branch named `windows-release`.
-
-Setup (install what is missing, ask me before each installer runs):
-1. Node 22 LTS, Git, GitHub CLI.
-2. Rust via rustup (stable, MSVC toolchain) and Visual Studio Build Tools 2022 with the "Desktop development with C++" workload. Tauri also needs WebView2, which Windows 10/11 already have.
-3. In the repo: `npm ci`.
-
-Build:
-4. `npm run desktop:build`. This runs Vite then `tauri build`. Outputs land in `src-tauri\target\release\bundle\nsis\*.exe` and `src-tauri\target\release\bundle\msi\*.msi`.
-5. Launch the built exe once and confirm the title screen shows, a run starts on click, and the window resizes without a white border.
-
-Release:
-6. Tag and release from the same repo you cloned: `git tag v0.6.0-windows && git push origin v0.6.0-windows`, then
-   `gh release create v0.6.0-windows "src-tauri\target\release\bundle\nsis\*.exe" "src-tauri\target\release\bundle\msi\*.msi" --title "Swingby 0.6.0 Windows" --notes "Windows installer (NSIS) and MSI. Unsigned: SmartScreen will warn on first run."`
-   If you worked in a fork, create the release on the fork and open a pull request to gremstard/swingby from `windows-release` with any config changes you had to make.
-7. Report the release URL, the installer sizes, and anything you changed in src-tauri/tauri.conf.json.
-
-Do not change gameplay code under src/. If `tauri build` fails on the icon or bundle step, fix the config, not the game.
-```
+Repo: https://github.com/gremstard/swingby (private). The iOS prompt assumes Claude Code is running on that Mac. Windows is not a target.
 
 ---
 

@@ -36,16 +36,15 @@ The default seed is the UTC date, so everyone plays the same corridor each day.
 
 ## Platforms
 
-One web build (`dist/`, a single HTML file) wrapped four ways:
+One web build (`dist/`, a single HTML file, also the quickest way to test) wrapped three ways:
 
 | Target | Wrapper | Local command | Needs |
 |---|---|---|---|
 | macOS | Tauri 2 | `npm run desktop:build` → `src-tauri/target/release/bundle/dmg` | Rust |
-| Windows | Tauri 2 | same, on a Windows machine or the CI `desktop` job → `.exe` / `.msi` | Rust + MSVC |
 | iOS | Capacitor 8 | `npm run mobile:sync && npm run ios:open` → build in Xcode | Xcode 26+ |
 | Android | Capacitor 8 | `npm run android:apk` → `android/app/build/outputs/apk` | Android SDK, JDK 21 |
 
-`.github/workflows/build.yml` builds all four on a `v*` tag or manual dispatch: macOS arm64 and x64 DMGs, a Windows NSIS installer and MSI, an Android debug APK plus release AAB, and an unsigned iOS archive. Signing for the stores needs an Apple App Store Connect API key and an Android keystore added as repository secrets.
+`.github/workflows/build.yml` builds everything on a `v*` tag or manual dispatch: macOS arm64 and x64 DMGs, an Android debug APK plus release AAB, and an unsigned iOS archive. Signing for the stores needs an Apple App Store Connect API key and an Android keystore added as repository secrets.
 
 Native touches: haptics on latch, spark, perihelion, near-miss, death and clear (Capacitor Haptics, feature-detected), hidden status bar, portrait lock, pause when the app goes to the background, no pinch-zoom.
 

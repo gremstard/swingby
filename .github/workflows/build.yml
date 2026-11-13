@@ -20,7 +20,6 @@ jobs:
         include:
           - { os: macos-latest, args: '--target aarch64-apple-darwin', name: mac-arm64 }
           - { os: macos-13, args: '--target x86_64-apple-darwin', name: mac-x64 }
-          - { os: windows-latest, args: '', name: windows-x64 }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -42,11 +41,7 @@ jobs:
           name: desktop-${{ matrix.name }}
           path: |
             src-tauri/target/**/release/bundle/dmg/*.dmg
-            src-tauri/target/**/release/bundle/nsis/*.exe
-            src-tauri/target/**/release/bundle/msi/*.msi
             src-tauri/target/release/bundle/dmg/*.dmg
-            src-tauri/target/release/bundle/nsis/*.exe
-            src-tauri/target/release/bundle/msi/*.msi
   android:
     needs: web
     runs-on: ubuntu-latest

@@ -10,7 +10,9 @@ export const T = {
   PERI_RATIO: 1.35,       // release below r < ratio*R => perihelion bonus
   NEAR_RATIO: 1.12,       // slow-mo near miss threshold
   // tide
-  TIDE_V0: 3.2, TIDE_V_PER_SECTOR: 0.35, TIDE_MAX_GAP: 34, TIDE_START_GAP: 14,
+  TIDE_V0: 4.6, TIDE_V_PER_SECTOR: 0.5, TIDE_MAX_GAP: 20, TIDE_START_GAP: 12,
+  ORBIT_SLOWMO: 0.55,     // time scale at max speed while tethered (bullet time makes tight orbits readable)
+  AIM_ASSIST_DEG: 11, AIM_ASSIST_RANGE: 16,
   // gen
   WELLS_PER_SECTOR0: 5, WELLS_PER_SECTOR_MAX: 9,
   WELL_R_MIN: 0.9, WELL_R_MAX: 2.2, WELL_GAP: 4.2,
