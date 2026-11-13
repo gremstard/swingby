@@ -1,0 +1,17 @@
+import { chromium } from 'playwright';
+const url = process.argv[2] || 'http://localhost:5188/'; const out = 'build/shots';
+const browser = await chromium.launch({ executablePath: '/Users/mustafa/Library/Caches/ms-playwright/chromium_headless_shell-1228/chrome-headless-shell-mac-arm64/chrome-headless-shell', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const page = await browser.newPage({ viewport: { width: 1280, height: 800 } }); const errors = []; page.on('pageerror', (e) => errors.push(e.message));
+await page.goto(url); await page.waitForFunction(() => window.renderer?.info.render.calls > 0); await page.waitForTimeout(300);
+await page.evaluate(() => { const p = window.G.profile; p.unlocked.push('fire', 'dart', 'electric', 'star'); p.equipped = { skin: 'dart', trail: 'fire' }; window.G.applyCosmetics(); window.menu.show('customize'); });
+await page.waitForTimeout(5000); await page.screenshot({ path: `${out}/10-customize-fire.png` });
+await page.evaluate(() => { const p = window.G.profile; p.equipped = { skin: 'star', trail: 'electric' }; window.G.applyCosmetics(); window.menu.render('customize'); });
+await page.waitForTimeout(5000); await page.screenshot({ path: `${out}/11-customize-electric.png` });
+await page.evaluate(() => { window.G.profile.tutorialDone = false; window.menu.hide(); window.startRun('level', 1); });
+await page.waitForFunction(() => document.querySelector('#hint').classList.contains('show'), null, { timeout: 15000 }).catch(() => {});
+await page.waitForTimeout(300); await page.screenshot({ path: `${out}/12-tutorial-hold.png` });
+await page.keyboard.down('Space'); await page.waitForTimeout(600); await page.screenshot({ path: `${out}/13-tutorial-orbit.png` }); await page.keyboard.up('Space');
+await page.evaluate(() => { window.comet.die('STRUCK A MINE'); window.S.running = false; window.S.won = false; }); 
+await page.evaluate(() => window.menu.show('dead', { mode: 'level', score: 162, xp: 40, newBest: false, best: 300, unlocks: [] }));
+await page.waitForTimeout(300); await page.screenshot({ path: `${out}/14-lost.png` });
+await browser.close(); console.log(JSON.stringify({ errors })); process.exit(errors.length ? 1 : 0);

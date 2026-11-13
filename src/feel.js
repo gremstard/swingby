@@ -46,6 +46,7 @@ export class Particles {
   }
 }
 
+const _c = new THREE.Color();
 // Ribbon trail: fixed-length history of positions, width tapers and alpha fades toward the tail.
 export class Trail {
   constructor(scene, n = 48) {
@@ -59,16 +60,17 @@ export class Trail {
   setLength(n) { this.n = Math.min(this.max, n); this.mesh.geometry.setDrawRange(0, (this.n - 1) * 6); }
   reset(x, y) { for (let i = 0; i < this.n; i++) { this.hist[i*2] = x; this.hist[i*2+1] = y; } }
   push(x, y, speedK) {
-    this.hist.copyWithin(2, 0, (this.n - 1) * 2); this.hist[0] = x; this.hist[1] = y;
+    this.hist.copyWithin(2, 0, (this.n - 1) * 2); this.hist[0] = x; this.hist[1] = y; this.t += 1;
     const pos = this.mesh.geometry.attributes.position.array, col = this.mesh.geometry.attributes.color.array;
     for (let i = 0; i < this.n; i++) {
       const px = this.hist[i*2], py = this.hist[i*2+1];
       const nx = this.hist[Math.min(this.n-1, i+1)*2], ny = this.hist[Math.min(this.n-1, i+1)*2+1];
       let dx = px - nx, dy = py - ny; const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
       const k = 1 - i / this.n; const w = this.width * k * (0.6 + 0.6 * speedK);
-      pos.set([px - dy * w, py + dx * w, -0.02, px + dy * w, py - dx * w, -0.02], i * 6);
-      const a = k * k * k * k * (0.5 + 0.7 * speedK);
-      col.set([this.color.r * a, this.color.g * a, this.color.b * a, this.color.r * a, this.color.g * a, this.color.b * a], i * 6);
+      let jx = 0, jy = 0; if (this.jitter && i > 0) { const n1 = Math.sin(i * 7.3 + this.t * 1.9) * Math.sin(i * 2.1 - this.t * 0.7); jx = dy * n1 * this.jitter * (1 - k * 0.5); jy = -dx * n1 * this.jitter * (1 - k * 0.5); }
+      pos.set([px - dy * w + jx, py + dx * w + jy, -0.02, px + dy * w + jx, py - dx * w + jy, -0.02], i * 6);
+      const a = k * k * k * k * (0.5 + 0.7 * speedK); const c = this.color2 ? _c.copy(this.color).lerp(this.color2, 1 - k) : this.color;
+      col.set([c.r * a, c.g * a, c.b * a, c.r * a, c.g * a, c.b * a], i * 6);
     }
     this.mesh.geometry.attributes.position.needsUpdate = true; this.mesh.geometry.attributes.color.needsUpdate = true;
   }

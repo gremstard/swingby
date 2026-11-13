@@ -1,6 +1,6 @@
-# PERIHELION
+# SWINGBY
 
-*A comet, a corridor of gravity wells, and one button.* **Hold** to tether to the nearest well and orbit it. **Release** to fly straight. The tighter the orbit, the faster you go, and the closer you are to burning. The Tide rises behind you. Chain sparks for combo, cash tight orbits for PERIHELION bonuses, climb as high as you can.
+*A comet, a corridor of gravity wells, and one button.* Named after the gravity-assist swing-by. **Hold** to tether to the nearest well and orbit it. **Release** to fly straight. The tighter the orbit, the faster you go, and the closer you are to burning. The Tide rises behind you. Chain sparks for combo, cash tight orbits for PERIHELION bonuses, climb as high as you can.
 
 Built with three.js r187 + Vite, no art or audio assets (everything is procedural and synthesized).
 
@@ -35,7 +35,7 @@ The default seed is the UTC date, so everyone plays the same corridor each day.
 
 ```bash
 npm run build          # dist/
-sh scripts_build.sh M5 # dist -> build/perihelion-M5.zip, commit + tag
+sh scripts_build.sh M6 # dist -> build/swingby-M6.zip, commit + tag
 npm run smoke -- http://localhost:5188/   # headless bot playtest + screenshots in build/shots
 ```
 

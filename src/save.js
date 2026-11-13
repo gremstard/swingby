@@ -5,7 +5,7 @@ const DEFAULT = () => ({
   levels: {},                       // id -> { stars, bestScore, completed, bestSparks, bestPeris }
   endless: { best: 0, bestH: 0 }, daily: { date: '', best: 0 },
   settings: { shake: true, flash: true, mute: false, reduceMotion: false },
-  stats: { runs: 0, deaths: 0, sparks: 0, peris: 0, height: 0 }, firstRun: true,
+  stats: { runs: 0, deaths: 0, sparks: 0, peris: 0, height: 0 }, firstRun: true, tutorialDone: false,
 });
 export function loadProfile() {
   let p;

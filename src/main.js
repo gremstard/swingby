@@ -52,7 +52,16 @@ const comet = new Comet();
 const rig = new CameraRig(camera);
 const input = new Input(canvas);
 
-const cometMesh = new THREE.Mesh(new THREE.SphereGeometry(0.42, 24, 16), new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff2d0, emissiveIntensity: 1.6, roughness: 0.2 }));
+const SHAPES = {
+  sphere: () => new THREE.SphereGeometry(0.42, 24, 16),
+  gem: () => new THREE.OctahedronGeometry(0.5, 0),
+  dart: () => { const g = new THREE.ConeGeometry(0.34, 1.1, 4); g.rotateZ(-Math.PI / 2); return g; },
+  ring: () => new THREE.TorusGeometry(0.36, 0.13, 10, 28),
+  star: () => { const sh = new THREE.Shape(); for (let i = 0; i < 10; i++) { const r = i % 2 ? 0.22 : 0.52, a = i / 10 * Math.PI * 2; i ? sh.lineTo(Math.cos(a) * r, Math.sin(a) * r) : sh.moveTo(Math.cos(a) * r, Math.sin(a) * r); } return new THREE.ExtrudeGeometry(sh, { depth: 0.2, bevelEnabled: false }).translate(0, 0, -0.1); },
+  cube: () => new THREE.BoxGeometry(0.62, 0.62, 0.62),
+  shard: () => new THREE.TetrahedronGeometry(0.58, 0),
+};
+const cometMesh = new THREE.Mesh(SHAPES.sphere(), new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff2d0, emissiveIntensity: 1.6, roughness: 0.2 }));
 scene.add(cometMesh);
 const tetherGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
 const tether = new THREE.Line(tetherGeo, new THREE.LineBasicMaterial({ color: 0xffe9a8, transparent: true, opacity: 0.9 })); tether.visible = false; scene.add(tether);
@@ -82,7 +91,8 @@ function pop(text, x, y, color = '#fff', big = false) {
 const S = { mode: 'endless', level: null, seed: dailySeed(), sectors: new Map(), wells: [], sparks_: [], mines: [], sweepers: [], holes: [], tideY: -T.TIDE_START_GAP, tideV: T.TIDE_V0, maxY: 0, score: 0,
   timeScale: 1, hitstop: 0, running: false, elapsed: 0, dead: false, deadAt: 0, won: false, popScale: 1, combo: 1, comboT: 0, bestCombo: 1, sparks: 0, peris: 0, totalSparks: 0, finishY: Infinity, tideMul: 1, shock: 0, glow: 0 };
 const G = { profile: loadProfile(), saveNow() { saveProfile(this.profile); }, resetProfile() { this.profile = resetProfile(); this.applyCosmetics(); this.applySettings(); },
-  play(mode, id) { startRun(mode, id); }, retry() { startRun(S.mode, S.level?.id, S.seed); }, applyCosmetics, applySettings };
+  play(mode, id) { startRun(mode, id); }, retry() { startRun(S.mode, S.level?.id, S.seed); }, applyCosmetics, applySettings,
+  demo(on) { S.demo = on; world.group.visible = !on; tideMesh.visible = tideEdge.visible = tideGlow.visible = !on; if (on) { S.running = false; trail.reset(comet.x, comet.y); } else { cometMesh.visible = false; } } };
 const menu = new Menu(document.querySelector('#menu'), G);
 
 function profileFor(idx) {
@@ -106,18 +116,29 @@ function startRun(mode, levelId, seed) {
   S.seed = mode === 'level' ? S.level.seed : mode === 'daily' ? dailySeed() : (seed || randomSeed());
   S.tideMul = S.level ? S.level.tide : 1; S.finishY = S.level ? levelFinishY(S.level) : Infinity;
   clearWorld(); comet.reset();
-  Object.assign(S, { tideY: -T.TIDE_START_GAP, tideV: T.TIDE_V0, maxY: 0, score: 0, timeScale: 1, hitstop: 0, running: true, elapsed: 0, dead: false, won: false, combo: 1, comboT: 0, bestCombo: 1, sparks: 0, peris: 0 });
+  Object.assign(S, { tideY: -T.TIDE_START_GAP, tideV: T.TIDE_V0, maxY: 0, score: 0, timeScale: 1, hitstop: 0, running: true, elapsed: 0, dead: false, won: false, combo: 1, comboT: 0, bestCombo: 1, sparks: 0, peris: 0, maxFired: false, demo: false });
   rig.snap(0, 4); ensureSectors();
   // levels: count every spark up front (finite corridor) for the star goal
   S.totalSparks = 0; if (S.level) { const prev = []; for (let i = 0; i < S.level.sectors; i++) { const sec = S.sectors.get(i) || genSector(S.seed, i, prev, profileFor(i)); S.totalSparks += sec.sparks.length; prev.push(...sec.wells); } }
   gate.visible = !!S.level; gate.position.set(0, S.finishY, 0.1);
   trail.reset(0, 0); cometMesh.visible = true; S.popScale = 1; audio.restart(); menu.hide(); hud.top.style.opacity = 1;
   G.profile.stats.runs++; G.profile.firstRun = false; G.saveNow();
-  hintEl.classList.remove('show');
-  if (S.level?.id === 1) hint('HOLD to tether to the nearest well · RELEASE to fly along the dotted line<br>You keep turning the way you were already passing the well: pass on its LEFT to swing clockwise, RIGHT to swing counter-clockwise', 9);
-  else if (S.level?.id === 2) hint('Tight orbits build speed. Release from inside the thin ring for a PERIHELION bonus', 6);
-  else if (S.level?.id === 4) hint('Sweepers rotate. Orbit the other way, or wait them out', 5);
-  else if (S.level?.id === 6) hint('A singularity pulls you in free flight. Tethers ignore it: latch to escape', 6);
+  hintEl.classList.remove('show'); hintT = 0;
+  S.tut = (!G.profile.tutorialDone && S.level?.id === 1) ? 'hold' : null;
+}
+// Tutorial: one or two words, shown when they matter, game slows until you do the thing.
+function tutorial(dt) {
+  if (!S.tut || !S.running) return;
+  if (S.tut === 'hold') {
+    if (comet.nearestReachable(S.wells)) { hint('HOLD', 99); S.timeScale = 0.25; if (comet.tether) { S.tut = 'release'; S.timeScale = 1; hintEl.classList.remove('show'); } }
+  } else if (S.tut === 'release') {
+    if (comet.tether) { const up = comet.vy / (Math.hypot(comet.vx, comet.vy) || 1); if (up > 0.8) { hint('RELEASE', 99); S.timeScale = 0.3; } else { hintEl.classList.remove('show'); S.timeScale = 1; } }
+    else { S.timeScale = 1; hintEl.classList.remove('show'); S.tut = 'spark'; }
+  } else if (S.tut === 'spark') {
+    if (S.sparks > 0) { S.tut = 'tight'; hint('TIGHT ORBIT = SPEED', 3); }
+  } else if (S.tut === 'tight') {
+    if (comet.tether && comet.minRatio < T.PERI_RATIO) { hint('RELEASE HERE = BONUS', 3); S.tut = 'done'; G.profile.tutorialDone = true; G.saveNow(); }
+  }
 }
 function endRun(won) {
   S.running = false; S.won = won; S.dead = !won; S.deadAt = S.elapsed; hintEl.classList.remove('show'); hintT = 0;
@@ -150,11 +171,21 @@ function endRun(won) {
 let skin = SKINS[0], trailDef = TRAILS[0];
 function applyCosmetics() {
   skin = SKINS.find(s => s.id === G.profile.equipped.skin) || SKINS[0]; trailDef = TRAILS.find(t => t.id === G.profile.equipped.trail) || TRAILS[0];
-  cometMesh.material.color.set(skin.color); cometMesh.material.emissive.set(skin.emissive); trail.color.set(skin.trail); trail.width = trailDef.width; trail.setLength(trailDef.len);
+  cometMesh.material.color.set(skin.color); cometMesh.material.emissive.set(skin.emissive);
+  if (cometMesh.userData.shape !== skin.shape) { cometMesh.geometry.dispose(); cometMesh.geometry = SHAPES[skin.shape](); cometMesh.userData.shape = skin.shape; }
+  trail.color.set(trailDef.color ?? skin.trail); trail.color2 = trailDef.color2 ? new THREE.Color(trailDef.color2) : null; trail.jitter = trailDef.jitter || 0; trail.width = trailDef.width; trail.setLength(trailDef.len);
   tether.material.color.set(skin.trail); orbitRing.material.color.set(skin.trail);
 }
 function applySettings() { const s = G.profile.settings; rig.strength = s.shake ? 0.8 : 0; rig.reduceMotion = s.reduceMotion; if (audio.muted !== s.mute) audio.toggleMute(); }
 function flash(color = '#fff', ms = 200) { if (!G.profile.settings.flash) { color = color === '#fff' ? 'rgba(255,255,255,.25)' : color.replace(')', ',.3)').replace('rgb', 'rgba'); } const el = document.createElement('div'); el.className = 'flash c'; el.style.setProperty('--c', color); el.style.animationDuration = ms + 'ms'; document.body.appendChild(el); setTimeout(() => el.remove(), ms + 20); }
+function trailFx(speedK) {
+  const fx = trailDef.fx; if (fx === 'none') return;
+  const r = Math.random();
+  if (fx === 'sparkle' && r < 0.3 + speedK) particles.burst(comet.x, comet.y, 1, trail.color, 1.5, 0.5, 0.3);
+  else if (fx === 'fire' && r < 0.9) { particles.burst(comet.x - comet.vx * 0.03, comet.y - comet.vy * 0.03, 2, r < 0.45 ? 0xff8a2a : 0xffd27a, 2.2, 0.45, 0.6); if (r < 0.2) particles.burst(comet.x, comet.y, 1, 0xff2a1a, 1, 0.8, 0.9); }
+  else if (fx === 'electric' && r < 0.5) particles.burst(comet.x + (Math.random() - 0.5) * 1.2, comet.y + (Math.random() - 0.5) * 1.2, 1, 0xdfffff, 5, 0.18, 0.35);
+  else if (fx === 'plasma' && r < 0.6) particles.burst(comet.x, comet.y, 1, r < 0.3 ? 0xb06bff : 0x4af0ff, 1.2, 0.7, 0.55);
+}
 function kick(amount) { S.shock = Math.min(1.5, S.shock + amount); }
 applyCosmetics(); applySettings();
 
@@ -175,15 +206,17 @@ function addCombo() { S.combo = Math.min(T.COMBO_MAX, S.combo + 1); S.comboT = T
 function kill(cause) { if (!comet.alive) return; comet.die(cause); events.push({ type: 'death' }); }
 function update(realDt) {
   if (S.hitstop > 0) { S.hitstop -= realDt; if (S.hitstop <= 0) S.timeScale = 1; }
+  if (S.won) { /* keep clear slow-mo */ }
   const dt = realDt * S.timeScale;
   const inp = input.consume();
   S.elapsed += realDt;
   if (S.running) {
+    tutorial(dt);
     comet.wantTether = inp.held;
     if (inp.pressed && !comet.tether) { const w = comet.nearestReachable(S.wells); if (w) { comet.latch(w); events.push({ type: 'latch', well: w }); } }
     if (inp.released && comet.tether) { const r = comet.release(); events.push({ type: 'release', ...r }); }
     comet.step(dt, S.wells, events, S.holes);
-    if (S.comboT > 0) { S.comboT -= dt; if (S.comboT <= 0 && S.combo > 1) { S.combo--; S.comboT = T.COMBO_WINDOW * 0.6; } }
+    if (S.comboT > 0) { S.comboT -= dt; if (S.comboT <= 0 && S.combo > 1) { S.combo = Math.max(1, Math.ceil(S.combo / 2)); S.comboT = T.COMBO_WINDOW * 0.6; if (S.combo < T.COMBO_MAX) S.maxFired = false; } }
     for (const sp of S.sparks_) {
       if (sp.got) continue;
       const sd = Math.hypot(sp.x - comet.x, sp.y - comet.y);
@@ -211,8 +244,13 @@ function update(realDt) {
     if (comet.alive && comet.y >= S.finishY) events.push({ type: 'win' });
     ensureSectors();
   }
+  if (S.demo) { // live preview: fly a figure-8 behind the customize panel
+    const t = S.elapsed * 1.6; const cx = window.innerWidth > 700 ? 7.5 : 0, cy = window.innerWidth > 700 ? 8 : 14;
+    comet.x = cx + Math.sin(t) * 3.4; comet.y = cy + Math.sin(t * 2) * 1.8; comet.vx = Math.cos(t) * 3.4 * 1.6; comet.vy = Math.cos(t * 2) * 1.8 * 3.2; comet.speed = T.CRUISE + 6; comet.alive = true;
+    cometMesh.visible = true; 
+  }
   for (const e of events) handle(e); events.length = 0;
-  rig.update(realDt, comet); tweens.update(realDt); particles.update(realDt); shock.update(realDt);
+  rig.update(realDt, comet); if (S.demo) { camera.position.set(window.innerWidth > 700 ? 2.5 : 0, window.innerWidth > 700 ? 8 : 8, 26); camera.rotation.set(0, 0, 0); } tweens.update(realDt); particles.update(realDt); shock.update(realDt);
   S.shock = Math.max(0, S.shock - realDt * 2.2); S.glow += ((S.combo >= 4 ? (S.combo - 3) * 0.06 : 0) - S.glow) * Math.min(1, realDt * 4);
   const rm = G.profile.settings.reduceMotion;
   rgb.uniforms.amount.value = rm ? 0 : S.shock * S.shock * 0.006; rgb.uniforms.angle.value += realDt * 3;
@@ -224,7 +262,8 @@ function update(realDt) {
   audio.update(speedK, !!comet.tether, S.running ? Math.max(0, 1 - (comet.y - S.tideY) / 12) : 0);
   // views
   cometMesh.position.set(comet.x, comet.y, 0);
-  if (comet.alive && S.running) { trail.push(comet.x, comet.y, speedK); if (trailDef.sparks && Math.random() < 0.3 + speedK) particles.burst(comet.x, comet.y, 1, skin.trail, 1.5, 0.5, 0.3); }
+  if ((comet.alive && S.running) || S.demo) { trail.push(comet.x, comet.y, speedK); trailFx(speedK); }
+  cometMesh.rotation.x += realDt * (skin.shape === 'ring' ? 4 : skin.shape === 'sphere' || skin.shape === 'dart' ? 0 : 2.5);
   if (skin.cycle) { const h = (S.elapsed * 0.25) % 1; cometMesh.material.emissive.setHSL(h, 0.9, 0.65); trail.color.setHSL(h, 0.9, 0.6); }
   cometMesh.rotation.z = Math.atan2(comet.vy, comet.vx);
   const stretch = 1 + speedK * 0.9; cometMesh.scale.set(stretch * S.popScale, (1 / Math.sqrt(stretch)) * S.popScale, S.popScale);
@@ -250,7 +289,7 @@ function handle(e) {
       tweens.add(0.3, (k) => { S.popScale = 1 + (1 - k) * 0.25; }, ease.outBack, 'pop');
       if (e.ratio < T.PERI_RATIO) { audio.perihelion(); particles.burst(comet.x, comet.y, 26, 0x8fd3ff, 11, 0.8, 0.7); particles.burst(comet.x, comet.y, 12, 0xffffff, 18, 0.4, 0.4); shock.spawn(comet.x, comet.y, { r: 7, dur: 0.55, color: 0x8fd3ff }); shock.spawn(e.well.x, e.well.y, { r: e.well.r * 3, dur: 0.7, color: e.well.mesh.material.color, opacity: 0.6 }); kick(0.7); flash('rgb(143,211,255)', 120); addCombo(); const pts = T.PERI_SCORE * S.combo; S.score += pts; S.peris++; rig.addTrauma(0.35); rig.punch(1); S.timeScale = 0.05; S.hitstop = Math.max(S.hitstop, T.HITSTOP_PERI); pop(`PERIHELION +${pts}`, comet.x, comet.y, '#8fd3ff'); }
       break;
-    case 'spark': rig.addTrauma(0.18 + S.combo * 0.02); audio.spark(S.combo); particles.burst(e.x, e.y, 10 + S.combo * 3, 0xffd166, 7 + S.combo, 0.55, 0.55); if (S.combo >= 4) { shock.spawn(e.x, e.y, { r: 2 + S.combo * 0.5, dur: 0.4, color: 0xffd166, opacity: 0.7 }); kick(0.15); } if (S.combo >= T.COMBO_MAX) { shock.spawn(e.x, e.y, { r: 9, dur: 0.6, color: 0xff6fa8, opacity: 0.8 }); kick(0.5); flash('rgb(255,111,168)', 100); pop('MAX COMBO', e.x, e.y + 1.5, '#ff6fa8', true); } tweens.add(0.25, (k) => { S.popScale = 1 + (1 - k) * 0.4; }, ease.outBack, 'pop'); pop(`+${e.pts}`, e.x, e.y, '#ffd166');
+    case 'spark': rig.addTrauma(0.18 + S.combo * 0.02); audio.spark(S.combo); particles.burst(e.x, e.y, 10 + S.combo * 3, 0xffd166, 7 + S.combo, 0.55, 0.55); if (S.combo >= 4) { shock.spawn(e.x, e.y, { r: 2 + S.combo * 0.5, dur: 0.4, color: 0xffd166, opacity: 0.7 }); kick(0.15); } if (S.combo >= T.COMBO_MAX && !S.maxFired) { S.maxFired = true; shock.spawn(e.x, e.y, { r: 9, dur: 0.6, color: 0xff6fa8, opacity: 0.8 }); kick(0.5); flash('rgb(255,111,168)', 100); pop('MAX', e.x, e.y + 1.5, '#ff6fa8', true); } tweens.add(0.25, (k) => { S.popScale = 1 + (1 - k) * 0.4; }, ease.outBack, 'pop'); pop(`+${e.pts}`, e.x, e.y, '#ffd166');
       hud.combo.animate([{ transform: 'scale(1.5)' }, { transform: 'scale(1)' }], { duration: 220, easing: 'ease-out' }); break;
     case 'near': rig.addTrauma(0.3); audio.near(); S.timeScale = 0.3; S.hitstop = Math.max(S.hitstop, T.SLOWMO_NEAR); particles.burst(comet.x, comet.y, 6, e.well.mesh.material.color, 4, 0.4, 0.4); shock.spawn(e.well.x, e.well.y, { r: e.well.r * 1.6, dur: 0.35, color: e.well.mesh.material.color, opacity: 0.5 }); kick(0.35); tweens.add(0.4, (k) => { e.well.mesh.material.emissiveIntensity = 0.28 + (1 - k) * 2.2; }, ease.outCubic, 'wellflash'); break;
     case 'death': {
@@ -268,9 +307,10 @@ function handle(e) {
       pop('CLEAR', comet.x, comet.y, '#ffd166', true); comet.tether = null; S.timeScale = 0.25; S.hitstop = 0.6; endRun(true); break;
   }
 }
-renderer.setAnimationLoop(() => { timer.update(); const dt = Math.min(Math.max(timer.getDelta(), 0), 0.05); update(dt); composer.render(); });
+renderer.setAnimationLoop(() => { timer.update(); const dt = Math.min(Math.max(timer.getDelta(), 0), 0.05); try { update(dt); composer.render(); window.__frames = (window.__frames || 0) + 1; } catch (e) { window.__err = String(e.stack || e); console.error(e); } });
 window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); composer.setSize(window.innerWidth, window.innerHeight); });
 // boot: world behind the menu, menu on top
 S.mode = 'endless'; S.seed = dailySeed(); comet.reset(); rig.snap(0, 4); ensureSectors(); trail.reset(0, 0); hud.top.style.opacity = 0;
+cometMesh.visible = false;
 menu.show('main');
-Object.assign(window, { renderer, scene, camera, S, comet, input, T, audio, G, menu, startRun, LEVELS });
+Object.assign(window, { renderer, scene, camera, S, comet, input, T, audio, G, menu, startRun, LEVELS, cometMesh, rig });
