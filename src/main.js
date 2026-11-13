@@ -125,7 +125,7 @@ function startRun(mode, levelId, seed) {
   S.mode = mode; S.level = mode === 'level' ? LEVELS.find(L => L.id === levelId) : null;
   S.seed = mode === 'level' ? S.level.seed : mode === 'daily' ? dailySeed() : (seed || randomSeed());
   S.tideMul = S.level ? S.level.tide : 1; S.finishY = S.level ? levelFinishY(S.level) : Infinity;
-  S.mods = S.level ? S.level.mods : { gravity: 0, wrap: false }; S.boss = null; for (const m of S.tempMines) scene.remove(m.mesh); S.tempMines = []; S.portalCd = 0; S.invuln = 0; S.gameT = 0;
+  S.mods = S.level ? S.level.mods : { gravity: 0, wrap: false }; S.boss = null; S.ceilHint = false; for (const m of S.tempMines) scene.remove(m.mesh); S.tempMines = []; S.portalCd = 0; S.invuln = 0; S.gameT = 0;
   applyTheme(S.level ? WORLDS[S.level.world - 1] : WORLDS[0]);
   // consumables bought in the shop are spent on the next run
   const inv = G.profile.items; S.shield = inv.shield > 0; if (S.shield) inv.shield--; S.magnetMul = inv.magnet > 0 ? 2 : 1; if (inv.magnet > 0) inv.magnet--;
@@ -293,10 +293,12 @@ function update(realDt) {
     S.tideV = (T.TIDE_V0 + Math.max(0, idx) * T.TIDE_V_PER_SECTOR) * S.tideMul;
     const gap = comet.y - S.tideY; const rubber = gap > T.TIDE_MAX_GAP ? (gap - T.TIDE_MAX_GAP) * 0.8 : 0;
     S.tideY += (S.tideV + rubber) * dt;
+    // the arena is sealed from the Tide while the boss lives: the ceiling holds you, so the Tide must hold too
+    if (S.boss && !S.boss.dead) S.tideY = Math.min(S.tideY, S.boss.y - T.SECTOR_H * 0.47);
     if (comet.y < S.tideY) kill('SWALLOWED BY THE TIDE');
     if (comet.y > S.maxY) { const a = Math.floor(S.maxY), b = Math.floor(comet.y); const spk = Math.max(0, (comet.speed - T.CRUISE) / (T.MAX_SPEED - T.CRUISE)); S.score += Math.round((b - a) * T.HEIGHT_SCORE * (1 + spk * 2)); S.maxY = comet.y; }
     if (comet.alive && comet.y >= S.finishY && !(S.boss && !S.boss.dead)) events.push({ type: 'win' });
-    if (S.boss && !S.boss.dead && comet.y > S.boss.y + T.SECTOR_H * 0.42) { comet.vy = -Math.abs(comet.vy); comet.y = S.boss.y + T.SECTOR_H * 0.42; } // arena ceiling until the boss falls
+    if (S.boss && !S.boss.dead && comet.y > S.boss.y + T.SECTOR_H * 0.42 && !comet.tether) { comet.y = S.boss.y + T.SECTOR_H * 0.42; comet.vy = -1.5; comet.speed = Math.max(T.CRUISE * 0.6, Math.hypot(comet.vx, comet.vy)); if (!S.ceilHint) { S.ceilHint = true; hint('BREAK THE BOSS', 2); } } // soft arena ceiling: drift back, don't get flung
     ensureSectors();
   }
   if (S.demo) { // live preview: fly a figure-8 behind the customize panel
