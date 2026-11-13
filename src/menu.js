@@ -64,14 +64,15 @@ export class Menu {
         <button data-a="reset" class="danger">RESET PROFILE</button></div>
         `;
     } else if (screen === 'results') {
-      const d = data; const L = d.level; const st = this.p.levels[L.id];
-      r.innerHTML = `<div class="logo"><h1 class="win">${d.won ? 'CLEAR' : 'LOST'}</h1><div class="tag">${L.id}. ${L.name}${d.won ? '' : ' · ' + d.cause}</div></div>
+      const d = data; const L = d.level; const ls = levelsOf(L.world); const nextL = ls[ls.indexOf(L) + 1] || (WORLDS[L.world] ? levelsOf(L.world + 1)[0] : null);
+      if (!d.won) { r.innerHTML = `<div class="tapzone" data-a="level" data-id="${L.id}"><div class="logo"><h1>${d.score}</h1><div class="tag">TAP TO RETRY</div></div><div class="xpmini">+${d.xp} XP · +${d.coins} ◉</div></div><div class="btns row2 corner"><button data-a="main">MENU</button></div>`; return; }
+      r.innerHTML = `<div class="logo"><h1 class="win">${d.score}</h1><div class="tag">${L.name}</div></div>
         <div class="stars big">${star(d.stars >= 1)}${star(d.stars >= 2)}${star(d.stars >= 3)}</div>
-        <div class="goals"><div class="${d.won ? 'ok' : ''}">reach the gate</div><div class="${d.sparkOk ? 'ok' : ''}">sparks ${d.sparks} / ${d.sparkNeed}</div><div class="${d.periOk ? 'ok' : ''}">perihelia ${d.peris} / ${L.periGoal}</div></div>
-        <div class="row"><div><div class="k">SCORE</div><div class="v">${d.score}</div></div><div><div class="k">BEST</div><div class="v">${st?.bestScore || 0}</div></div><div><div class="k">XP</div><div class="v">+${d.xp}</div></div></div>
+        <div class="goals"><div class="${d.sparkOk ? 'ok' : ''}">◆ ${d.sparks}/${d.sparkNeed}</div><div class="${d.periOk ? 'ok' : ''}">◎ ${d.peris}/${L.periGoal}</div><div>+${d.xp} XP</div><div class="coins">+${d.coins} ◉</div></div>
+        ${L.boss ? `<div class="unl">WORLD ${L.world} CLEARED${WORLDS[L.world] ? ' · ' + WORLDS[L.world].name + ' UNLOCKED' : ''}</div>` : ''}
         ${this.xpBar()}
-        ${d.unlocks.length ? `<div class="unl">UNLOCKED: ${d.unlocks.map(u => u.name).join(' · ')}</div>` : ''}
-        <div class="btns row2">${d.won && LEVELS[L.id] ? `<button data-a="level" data-id="${L.id + 1}" class="big">NEXT ›</button>` : ''}<button data-a="level" data-id="${L.id}">RETRY</button><button data-a="main">MENU</button></div>`;
+        ${d.unlocks.length ? `<div class="unl">NEW: ${d.unlocks.map(u => u.name).join(' · ')}</div>` : ''}
+        <div class="btns row2">${nextL ? `<button data-a="level" data-id="${nextL.id}" class="big">NEXT ›</button>` : ''}<button data-a="level" data-id="${L.id}">RETRY</button><button data-a="main">MENU</button></div>`;
     } else if (screen === 'pause') {
       r.innerHTML = `<div class="tapzone" data-a="resume"><div class="logo"><h1>SWINGBY</h1><div class="tag">TAP TO RESUME</div></div></div><div class="btns row2 corner"><button data-a="retry">RETRY</button><button data-a="main">MENU</button></div>`;
     } else if (screen === 'dead') {
