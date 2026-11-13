@@ -119,6 +119,7 @@ export class WorldView {
     this.wellGeo = new THREE.SphereGeometry(1, 36, 24);
     this.ringGeo = new THREE.RingGeometry(0.985, 1.0, 96);
     this.wallMat = new THREE.MeshBasicMaterial({ color: 0x3a2a66, transparent: true, opacity: 0.9, side: THREE.DoubleSide });
+    this.wallMatL = this.wallMat.clone(); this.wallMatR = this.wallMat.clone(); // per side, so a wind level can mark its deadly wall
     this.sparkGeo = new THREE.OctahedronGeometry(0.32, 0);
     this.sparkMat = new THREE.MeshStandardMaterial({ color: 0xffd166, emissive: 0xffb000, emissiveIntensity: 1.2, roughness: 0.3 });
     this.mineGeo = new THREE.IcosahedronGeometry(0.55, 0);
@@ -175,8 +176,8 @@ export class WorldView {
     if (sector.halfW >= 50) { this.group.add(g); this.sectors.set(sector.idx, g); return; } // wrap levels: no walls
     const extra = sector.idx === 0 ? 80 : 0; // first sector's walls also cover the space below the start
     const wallGeo = new THREE.PlaneGeometry(40, T.SECTOR_H + extra);
-    const l = new THREE.Mesh(wallGeo, this.wallMat); l.position.set(-sector.halfW - 20, sector.y0 - extra / 2 + T.SECTOR_H / 2, -0.2); g.add(l);
-    const r = new THREE.Mesh(wallGeo, this.wallMat); r.position.set(sector.halfW + 20, sector.y0 - extra / 2 + T.SECTOR_H / 2, -0.2); g.add(r);
+    const l = new THREE.Mesh(wallGeo, this.wallMatL); l.position.set(-sector.halfW - 20, sector.y0 - extra / 2 + T.SECTOR_H / 2, -0.2); g.add(l);
+    const r = new THREE.Mesh(wallGeo, this.wallMatR); r.position.set(sector.halfW + 20, sector.y0 - extra / 2 + T.SECTOR_H / 2, -0.2); g.add(r);
     g.userData.sector = sector; this.group.add(g);
     this.sectors.set(sector.idx, g);
   }
@@ -190,7 +191,7 @@ export class WorldView {
   remove(idx) {
     const g = this.sectors.get(idx); if (!g) return;
     const sec = g.userData.sector; if (sec) this.dynamic = this.dynamic.filter(w => !sec.wells.includes(w));
-    const shared = new Set([this.wellGeo, this.ringGeo, this.sparkGeo, this.mineGeo, this.sparkMat, this.mineMat, this.wallMat, this.holeMat, this.holeRingMat, this.spikeGeo, this.spikeMat, this.coreGeo, this.coreMat]);
+    const shared = new Set([this.wellGeo, this.ringGeo, this.sparkGeo, this.mineGeo, this.sparkMat, this.mineMat, this.wallMat, this.holeMat, this.holeRingMat, this.spikeGeo, this.spikeMat, this.coreGeo, this.coreMat, this.wallMatL, this.wallMatR]);
     g.traverse((o) => { if (!o.isMesh) return; if (!shared.has(o.geometry)) o.geometry.dispose(); if (!shared.has(o.material)) o.material.dispose(); });
     this.group.remove(g); this.sectors.delete(idx);
   }

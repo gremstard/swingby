@@ -145,6 +145,9 @@ function startRun(mode, levelId, seed) {
 }
 function applyTheme(W) {
   scene.background.set(W.bg); stars.material.color.set(W.star); tideEdge.material.color.set(W.tide); tideGlow.material.color.set(W.tide); tideMesh.material.color.set(W.bg).lerp(new THREE.Color(W.tide), 0.18); world.wallMat.color.set(W.bg).lerp(new THREE.Color().setHSL(W.hue, 0.45, 0.16), 0.8);
+  world.wallMatL.color.copy(world.wallMat.color); world.wallMatR.color.copy(world.wallMat.color);
+  // wind: the wall you're pushed toward is the void again (deadly, red); the other side stays a bumper
+  const g = S.mods.gravity || 0; if (g) (g > 0 ? world.wallMatR : world.wallMatL).color.set(0x5a0a1a);
 }
 // Tutorial: one or two words, shown when they matter, game slows until you do the thing.
 function tutorial(dt) {
@@ -291,7 +294,8 @@ function update(realDt) {
     }
     const idx = Math.floor(comet.y / T.SECTOR_H); const hw = halfWidth(idx);
     // side walls are bumpers, not death: the Tide is the only thing that ends a run from outside
-    if (!S.mods.wrap && Math.abs(comet.x) > hw - 0.4 && comet.alive) { const sgn = Math.sign(comet.x); if (comet.tether) comet.release(); comet.x = sgn * (hw - 0.45); if (sgn * comet.vx > 0) { comet.speed = Math.max(T.CRUISE * 0.8, comet.speed * 0.85); comet.vx = -Math.abs(comet.vx) * sgn * 0.35; comet.vy = Math.max(Math.abs(comet.vy), comet.speed * 0.9); events.push({ type: 'bounce', x: sgn * hw }); } } // bounce is mostly upward: it must not throw you back into the well you just left
+    const g = S.mods.gravity || 0; if (g && comet.alive && Math.sign(comet.x) === Math.sign(g) && Math.abs(comet.x) > hw) kill('LOST TO THE VOID');
+    if (!S.mods.wrap && Math.abs(comet.x) > hw - 0.4 && comet.alive && !(g && Math.sign(comet.x) === Math.sign(g))) { const sgn = Math.sign(comet.x); if (comet.tether) comet.release(); comet.x = sgn * (hw - 0.45); if (sgn * comet.vx > 0) { comet.speed = Math.max(T.CRUISE * 0.8, comet.speed * 0.85); comet.vx = -Math.abs(comet.vx) * sgn * 0.35; comet.vy = Math.max(Math.abs(comet.vy), comet.speed * 0.9); events.push({ type: 'bounce', x: sgn * hw }); } } // bounce is mostly upward: it must not throw you back into the well you just left
     if (S.boss && !S.boss.dead && Math.abs(comet.y - S.boss.y) < T.SECTOR_H * 0.5) S.tideMul = (S.level?.tide || 1) * 0.35; else S.tideMul = S.level ? S.level.tide : 1;
     S.tideV = (T.TIDE_V0 + Math.max(0, idx) * T.TIDE_V_PER_SECTOR) * S.tideMul;
     const gap = comet.y - S.tideY; const rubber = gap > T.TIDE_MAX_GAP ? (gap - T.TIDE_MAX_GAP) * 0.8 : 0;
