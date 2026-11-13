@@ -144,7 +144,7 @@ function startRun(mode, levelId, seed) {
   if (S.level?.boss) { const b = S.sectors.get(S.level.sectors - 1)?.boss; if (b) { S.boss = b; hud.boss.firstElementChild.textContent = S.level.name.toUpperCase(); } }
 }
 function applyTheme(W) {
-  scene.background.set(W.bg); stars.material.color.set(W.star); tideEdge.material.color.set(W.tide); tideGlow.material.color.set(W.tide); tideMesh.material.color.set(W.bg).lerp(new THREE.Color(W.tide), 0.18); world.wallMat.color.set(W.bg).lerp(new THREE.Color().setHSL(W.hue, 0.5, 0.35), 0.75);
+  scene.background.set(W.bg); stars.material.color.set(W.star); tideEdge.material.color.set(W.tide); tideGlow.material.color.set(W.tide); tideMesh.material.color.set(W.bg).lerp(new THREE.Color(W.tide), 0.18); world.wallMat.color.set(W.bg).lerp(new THREE.Color().setHSL(W.hue, 0.45, 0.16), 0.8);
 }
 // Tutorial: one or two words, shown when they matter, game slows until you do the thing.
 function tutorial(dt) {
