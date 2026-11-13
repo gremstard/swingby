@@ -30,8 +30,10 @@ export class Comet {
     this.tether = null;
     return { ratio: this.minRatio, well: t.well };
   }
-  step(dt, wells, events) {
+  step(dt, wells, events, holes = []) {
     if (!this.alive) return;
+    // black holes: pull in free flight (tether ignores them; that's the escape)
+    if (!this.tether) for (const h of holes) { const dx = h.x - this.x, dy = h.y - this.y, d2 = Math.max(1, dx*dx + dy*dy), d = Math.sqrt(d2); const f = h.pull / d2 * dt; this.vx += dx / d * f; this.vy += dy / d * f; this.speed = Math.min(T.MAX_SPEED, Math.hypot(this.vx, this.vy)); }
     if (this.tether) {
       const t = this.tether;
       // Perihelion rule: speed grows with 1/r. Tighter orbit = faster = more lethal.

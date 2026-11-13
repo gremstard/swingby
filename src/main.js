@@ -44,7 +44,17 @@ scene.add(tideMesh, tideEdge);
 
 const hud = { h: document.querySelector('#h'), score: document.querySelector('#score'), combo: document.querySelector('#combo'), debug: document.querySelector('#debug'), card: document.querySelector('#card') };
 
-const S = { seed: dailySeed(), sectors: new Map(), wells: [], tideY: -T.TIDE_START_GAP, tideV: T.TIDE_V0, maxY: 0, score: 0, timeScale: 1, hitstop: 0, running: false, elapsed: 0, dead: false, deadAt: 0 };
+const S = { seed: dailySeed(), sectors: new Map(), wells: [], tideY: -T.TIDE_START_GAP, tideV: T.TIDE_V0, maxY: 0, score: 0, timeScale: 1, hitstop: 0, running: false, elapsed: 0, dead: false, deadAt: 0,
+  combo: 1, comboT: 0, bestCombo: 1, sparks: 0, peris: 0, best: Number(localStorage.getItem('peri.best') || 0), bestH: Number(localStorage.getItem('peri.bestH') || 0) };
+const popsEl = document.querySelector('#pops');
+const _v = new THREE.Vector3();
+function pop(text, x, y, color = '#fff') {
+  _v.set(x, y, 0).project(camera);
+  const el = document.createElement('div'); el.className = 'pop'; el.textContent = text; el.style.color = color;
+  el.style.left = `${(_v.x * 0.5 + 0.5) * window.innerWidth}px`; el.style.top = `${(-_v.y * 0.5 + 0.5) * window.innerHeight}px`;
+  popsEl.appendChild(el); setTimeout(() => el.remove(), 950);
+}
+function addCombo() { S.combo = Math.min(T.COMBO_MAX, S.combo + 1); S.comboT = T.COMBO_WINDOW; S.bestCombo = Math.max(S.bestCombo, S.combo); }
 
 function ensureSectors() {
   const cur = Math.floor(comet.y / T.SECTOR_H);
@@ -52,17 +62,23 @@ function ensureSectors() {
     if (!S.sectors.has(i)) { const prev = [...S.sectors.values()].flatMap(s => s.wells); const sec = genSector(S.seed, i, prev); S.sectors.set(i, sec); world.add(sec); }
   }
   for (const i of [...S.sectors.keys()]) if (i < cur - 1) { world.remove(i); S.sectors.delete(i); }
-  S.wells = [...S.sectors.values()].flatMap(s => s.wells).filter(w => Math.abs(w.y - comet.y) < 40);
+  const near = (o) => Math.abs(o.y - comet.y) < 40;
+  const secs = [...S.sectors.values()];
+  S.wells = secs.flatMap(s => s.wells).filter(near); S.sparks_ = secs.flatMap(s => s.sparks).filter(near);
+  S.mines = secs.flatMap(s => s.mines).filter(near); S.sweepers = secs.flatMap(s => s.sweepers).filter(sw => near(sw.well)); S.holes = secs.flatMap(s => s.holes).filter(near);
 }
 function start(seed) {
   S.seed = seed; for (const i of [...S.sectors.keys()]) world.remove(i); S.sectors.clear();
-  comet.reset(); Object.assign(S, { tideY: -T.TIDE_START_GAP, tideV: T.TIDE_V0, maxY: 0, score: 0, timeScale: 1, hitstop: 0, running: true, elapsed: 0, dead: false });
+  comet.reset(); Object.assign(S, { tideY: -T.TIDE_START_GAP, tideV: T.TIDE_V0, maxY: 0, score: 0, timeScale: 1, hitstop: 0, running: true, elapsed: 0, dead: false, combo: 1, comboT: 0, bestCombo: 1, sparks: 0, peris: 0 });
   rig.snap(0, 4); ensureSectors(); hud.card.classList.add('hidden');
 }
 function die() {
   S.dead = true; S.deadAt = S.elapsed; S.running = false;
+  const newBest = S.score > S.best; if (newBest) { S.best = S.score; localStorage.setItem('peri.best', S.best); }
+  if (S.maxY > S.bestH) { S.bestH = Math.floor(S.maxY); localStorage.setItem('peri.bestH', S.bestH); }
   hud.card.innerHTML = `<h1>PERIHELION</h1><div class="cause">${comet.cause}</div>
-  <div class="row"><div><div class="k">HEIGHT</div><div class="v">${Math.floor(S.maxY)}</div></div><div><div class="k">SCORE</div><div class="v">${S.score}</div></div></div>
+  <div class="row"><div><div class="k">HEIGHT</div><div class="v">${Math.floor(S.maxY)}</div></div><div><div class="k">SCORE</div><div class="v">${S.score}</div></div><div><div class="k">SPARKS</div><div class="v">${S.sparks}</div></div><div><div class="k">BEST COMBO</div><div class="v">×${S.bestCombo}</div></div><div><div class="k">PERIHELIA</div><div class="v">${S.peris}</div></div></div>
+  <div class="sub">${newBest ? 'NEW BEST' : 'BEST ' + S.best}</div>
   <div class="hint">seed <b>${S.seed}</b><br><kbd>R</kbd> retry seed &nbsp; <kbd>N</kbd> new seed</div>`;
   hud.card.classList.remove('hidden');
 }
@@ -80,7 +96,26 @@ function update(realDt) {
     comet.wantTether = inp.held;
     if (inp.pressed && !comet.tether) { const w = comet.nearestReachable(S.wells); if (w) { comet.latch(w); events.push({ type: 'latch', well: w }); } }
     if (inp.released && comet.tether) { const r = comet.release(); events.push({ type: 'release', ...r }); }
-    comet.step(dt, S.wells, events);
+    comet.step(dt, S.wells, events, S.holes);
+    // combo decays one step per window, never resets: forgiving but tense
+    if (S.comboT > 0) { S.comboT -= dt; if (S.comboT <= 0 && S.combo > 1) { S.combo--; S.comboT = T.COMBO_WINDOW * 0.6; } }
+    // sparks
+    for (const sp of S.sparks_) {
+      if (sp.got) continue;
+      if (Math.hypot(sp.x - comet.x, sp.y - comet.y) < 1.0) { sp.got = true; sp.mesh.visible = false; addCombo(); const pts = T.SPARK_SCORE * S.combo; S.score += pts; S.sparks++; events.push({ type: 'spark', x: sp.x, y: sp.y, pts }); }
+      else { sp.mesh.rotation.y += dt * 2; sp.mesh.position.z = Math.sin(S.elapsed * 3 + sp.phase) * 0.15; }
+    }
+    // hazards
+    if (comet.alive) {
+      for (const m of S.mines) { m.mesh.rotation.x += dt * 0.7; m.mesh.rotation.y += dt; if (Math.hypot(m.x - comet.x, m.y - comet.y) < m.r + 0.4) { comet.die('STRUCK A MINE'); events.push({ type: 'death' }); break; } }
+      for (const sw of S.sweepers) {
+        sw.a += sw.w * dt; sw.mesh.rotation.z = sw.a;
+        const ax = sw.well.x + Math.cos(sw.a) * sw.well.r, ay = sw.well.y + Math.sin(sw.a) * sw.well.r, bx = sw.well.x + Math.cos(sw.a) * (sw.well.r + sw.len), by = sw.well.y + Math.sin(sw.a) * (sw.well.r + sw.len);
+        const px = comet.x - ax, py = comet.y - ay, dx = bx - ax, dy = by - ay; const t = Math.max(0, Math.min(1, (px*dx + py*dy) / (dx*dx + dy*dy))); const d = Math.hypot(px - dx*t, py - dy*t);
+        if (comet.alive && d < sw.thick / 2 + 0.4) { comet.die('CUT DOWN BY A SWEEPER'); events.push({ type: 'death' }); }
+      }
+      for (const h of S.holes) { h.ring.rotation.z += dt * 2; h.ring.scale.setScalar(h.r * (1.4 + 0.3 * Math.sin(S.elapsed * 4))); if (comet.alive && Math.hypot(h.x - comet.x, h.y - comet.y) < h.r + 0.3) { comet.die('CRUSHED BY A SINGULARITY'); events.push({ type: 'death' }); } }
+    }
     // bounds + tide
     const idx = Math.floor(comet.y / T.SECTOR_H); const hw = halfWidthAt(Math.max(0, idx));
     if (comet.alive && Math.abs(comet.x) > hw) { comet.die('LOST TO THE VOID'); events.push({ type: 'death' }); }
@@ -102,13 +137,16 @@ function update(realDt) {
   } else { tether.visible = false; orbitRing.visible = false; }
   tideMesh.position.set(camera.position.x, S.tideY - 200, -0.1); tideEdge.position.set(camera.position.x, S.tideY, 0.1);
   window.__stars.position.set(camera.position.x * 0.8, camera.position.y * 0.8, 0);
-  hud.h.textContent = Math.floor(S.maxY); hud.score.textContent = S.score;
+  hud.h.textContent = Math.floor(S.maxY); hud.score.textContent = S.score; hud.combo.textContent = `×${S.combo}`; hud.combo.classList.toggle('hot', S.combo >= 3);
   hud.debug.textContent = `speed ${comet.speed.toFixed(1)}  tide gap ${(comet.y - S.tideY).toFixed(1)}  tether ${comet.tether ? (comet.tether.R / comet.tether.well.r).toFixed(2) + 'R' : '-'}  wells ${S.wells.length}  ts ${S.timeScale.toFixed(2)}  seed ${S.seed}`;
 }
 function handle(e) {
   switch (e.type) {
     case 'latch': rig.addTrauma(0.12); break;
-    case 'release': break;
+    case 'release':
+      if (e.ratio < T.PERI_RATIO) { addCombo(); const pts = T.PERI_SCORE * S.combo; S.score += pts; S.peris++; rig.addTrauma(0.35); rig.punch(1); S.timeScale = 0.05; S.hitstop = Math.max(S.hitstop, T.HITSTOP_PERI); pop(`PERIHELION +${pts}`, comet.x, comet.y, '#8fd3ff'); }
+      break;
+    case 'spark': rig.addTrauma(0.18); pop(`+${e.pts}`, e.x, e.y, '#ffd166'); break;
     case 'near': rig.addTrauma(0.3); S.timeScale = 0.3; S.hitstop = Math.max(S.hitstop, T.SLOWMO_NEAR); break;
     case 'death': rig.addTrauma(0.9); S.timeScale = 0.02; S.hitstop = T.HITSTOP_DEATH; die(); break;
   }
@@ -116,4 +154,4 @@ function handle(e) {
 renderer.setAnimationLoop(() => { timer.update(); const dt = Math.min(Math.max(timer.getDelta(), 0), 0.05); update(dt); renderer.render(scene, camera); });
 window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
 start(S.seed);
-Object.assign(window, { renderer, scene, camera, S, comet, start, input, T });
+Object.assign(window, { renderer, scene, camera, S, comet, start, input, T, halfWidthAt });
