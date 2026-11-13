@@ -49,13 +49,14 @@ export class Particles {
 // Ribbon trail: fixed-length history of positions, width tapers and alpha fades toward the tail.
 export class Trail {
   constructor(scene, n = 48) {
-    this.n = n; this.hist = new Float32Array(n * 2); this.filled = 0;
+    this.max = n; this.n = n; this.hist = new Float32Array(n * 2); this.filled = 0;
     const pos = new Float32Array(n * 2 * 3), col = new Float32Array(n * 2 * 3), idx = [];
     for (let i = 0; i < n - 1; i++) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.setIndex(idx);
     this.mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
     this.mesh.frustumCulled = false; scene.add(this.mesh); this.color = new THREE.Color(0xffd9a0); this.width = 0.2;
   }
+  setLength(n) { this.n = Math.min(this.max, n); this.mesh.geometry.setDrawRange(0, (this.n - 1) * 6); }
   reset(x, y) { for (let i = 0; i < this.n; i++) { this.hist[i*2] = x; this.hist[i*2+1] = y; } }
   push(x, y, speedK) {
     this.hist.copyWithin(2, 0, (this.n - 1) * 2); this.hist[0] = x; this.hist[1] = y;
@@ -70,5 +71,25 @@ export class Trail {
       col.set([this.color.r * a, this.color.g * a, this.color.b * a, this.color.r * a, this.color.g * a, this.color.b * a], i * 6);
     }
     this.mesh.geometry.attributes.position.needsUpdate = true; this.mesh.geometry.attributes.color.needsUpdate = true;
+  }
+}
+
+// Pooled expanding rings (additive). The signature "something big happened" shape.
+export class Shockwaves {
+  constructor(scene, n = 16) {
+    this.geo = new THREE.RingGeometry(0.86, 1.0, 96); this.pool = [];
+    for (let i = 0; i < n; i++) { const m = new THREE.Mesh(this.geo, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide })); m.visible = false; m.position.z = 0.4; scene.add(m); this.pool.push({ m, t: 0, dur: 1, r: 1, o: 1 }); }
+    this.i = 0;
+  }
+  spawn(x, y, { r = 8, dur = 0.6, color = 0xffffff, opacity = 0.9, thick = 1 } = {}) {
+    const s = this.pool[this.i]; this.i = (this.i + 1) % this.pool.length;
+    s.t = 0; s.dur = dur; s.r = r; s.o = opacity; s.m.position.set(x, y, 0.4); s.m.material.color.set(color); s.m.visible = true; s.m.scale.setScalar(0.01); s.thick = thick;
+  }
+  update(dt) {
+    for (const s of this.pool) {
+      if (!s.m.visible) continue; s.t += dt; const k = Math.min(1, s.t / s.dur); const e = 1 - Math.pow(1 - k, 3);
+      s.m.scale.setScalar(0.01 + s.r * e); s.m.material.opacity = s.o * (1 - k) * (1 - k);
+      if (k >= 1) s.m.visible = false;
+    }
   }
 }

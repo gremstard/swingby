@@ -3,38 +3,39 @@ import { T } from './tuning.js';
 import { makeRng, subSeed } from './rng.js';
 
 // Pure data generation: deterministic per (runSeed, sectorIndex).
-export function genSector(runSeed, idx, prevWells) {
+export function genSector(runSeed, idx, prevWells, P) {
   const rng = makeRng(subSeed(runSeed, 'sector', idx));
   const y0 = idx * T.SECTOR_H, y1 = y0 + T.SECTOR_H;
-  const halfW = halfWidthAt(idx);
+  const halfW = P.halfW;
   const wells = [];
-  const n = Math.min(T.WELLS_PER_SECTOR_MAX, T.WELLS_PER_SECTOR0 + Math.floor(idx * 0.6));
+  if (P.empty) return { idx, y0, y1, halfW, wells, mines: [], sweepers: [], holes: [], sparks: [] };
+  const n = P.wells;
   const all = [...prevWells];
   let tries = 0;
   while (wells.length < n && tries++ < 400) {
     const r = rng.range(T.WELL_R_MIN, T.WELL_R_MAX);
     const x = rng.range(-halfW + r + 1.2, halfW - r - 1.2);
-    const y = rng.range(y0 + (idx === 0 ? 14 : 2), y1 - 2);
+    const y = rng.range(y0 + P.startPad, y1 - 2);
     let ok = true;
     for (const w of all) {
       const d = Math.hypot(w.x - x, w.y - y);
       if (d < w.r + r + T.WELL_GAP) { ok = false; break; }
     }
     if (!ok) continue;
-    const w = { x, y, r, hue: rng.range(0.52, 0.72), spin: rng.range(-1, 1) };
+    const w = { x, y, r, hue: P.hue == null ? rng.range(0.52, 0.72) : (P.hue + rng.range(-0.06, 0.06) + 1) % 1, spin: rng.range(-1, 1) };
     wells.push(w); all.push(w);
   }
   // hazards
   const mines = [], sweepers = [], holes = [];
-  const nm = Math.min(T.MINES_MAX, T.MINES_PER_SECTOR0 + Math.floor(idx * 0.7));
+  const nm = P.mines;
   tries = 0;
   while (mines.length < nm && tries++ < 300) {
-    const x = rng.range(-halfW + 1, halfW - 1), y = rng.range(y0 + (idx === 0 ? 20 : 3), y1 - 1);
+    const x = rng.range(-halfW + 1, halfW - 1), y = rng.range(y0 + P.startPad + 6, y1 - 1);
     if (all.some(w => Math.hypot(w.x - x, w.y - y) < w.r + 2.2) || mines.some(m => Math.hypot(m.x - x, m.y - y) < 3)) continue;
     mines.push({ x, y, r: 0.55 });
   }
-  if (idx >= 1) for (const w of wells) if (rng.chance(Math.min(0.5, 0.12 + idx * 0.06))) sweepers.push({ well: w, len: w.r * 2.4, w: rng.pick([-1, 1]) * rng.range(0.9, 1.6), a: rng.range(0, 6.28), thick: 0.28 });
-  if (idx >= 3 && rng.chance(Math.min(0.6, 0.25 + idx * 0.05))) {
+  for (const w of wells) if (P.sweeperP > 0 && rng.chance(P.sweeperP)) sweepers.push({ well: w, len: w.r * 2.4, w: rng.pick([-1, 1]) * rng.range(0.9, 1.6), a: rng.range(0, 6.28), thick: 0.28 });
+  if (P.holeP > 0 && rng.chance(P.holeP)) {
     tries = 0;
     while (holes.length < 1 && tries++ < 200) {
       const x = rng.range(-halfW + 3, halfW - 3), y = rng.range(y0 + 4, y1 - 4);
@@ -44,10 +45,17 @@ export function genSector(runSeed, idx, prevWells) {
   }
   // sparks: ~40% hug a well's perihelion band (invites tight orbits), the rest sit in open lanes
   const sparks = []; tries = 0;
-  while (sparks.length < T.SPARKS_PER_SECTOR && tries++ < 500) {
+  while (sparks.length < P.sparks && tries++ < 500) {
     let x, y;
-    if (wells.length && rng.chance(0.4)) { const w = rng.pick(wells); const a = rng.range(0, 6.28), rr = w.r * rng.range(1.15, 1.32); x = w.x + Math.cos(a) * rr; y = w.y + Math.sin(a) * rr; }
-    else { x = rng.range(-halfW + 1, halfW - 1); y = rng.range(y0 + (idx === 0 ? 8 : 1), y1 - 1); }
+    const mode = rng.next();
+    if (wells.length && mode < 0.55) {
+      // tangent exit lane: where a release from a comfortable orbit actually sends you (upward-ish)
+      const w = rng.pick(wells); const R = w.r * rng.range(1.4, 2.2); const a = rng.range(0, 6.28); const dir = rng.chance(0.5) ? 1 : -1;
+      const tx = -Math.sin(a) * dir, ty = Math.cos(a) * dir; if (ty < 0.15) continue;
+      const d = rng.range(2.5, 7);
+      x = w.x + Math.cos(a) * R + tx * d; y = w.y + Math.sin(a) * R + ty * d;
+    } else if (wells.length && mode < 0.7) { const w = rng.pick(wells); const a = rng.range(0, 6.28), rr = w.r * rng.range(1.15, 1.32); x = w.x + Math.cos(a) * rr; y = w.y + Math.sin(a) * rr; }
+    else { x = rng.range(-halfW + 1, halfW - 1); y = rng.range(y0 + P.startPad - 6, y1 - 1); }
     if (Math.abs(x) > halfW - 0.8) continue;
     if (all.some(w => Math.hypot(w.x - x, w.y - y) < w.r + 0.9)) continue;
     if (mines.some(m => Math.hypot(m.x - x, m.y - y) < 1.6) || holes.some(h => Math.hypot(h.x - x, h.y - y) < 3)) continue;

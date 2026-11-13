@@ -5,7 +5,7 @@ function noise(t, seed) { return 0.6 * Math.sin(t * 11 + seed) + 0.4 * Math.sin(
 
 export class CameraRig {
   constructor(camera) {
-    this.camera = camera; this.fx = 0; this.fy = 0; this.trauma = 0; this.t = 0; this.strength = 0.8; this.fovPunch = 0; this.baseFov = 50;
+    this.camera = camera; this.fx = 0; this.fy = 0; this.trauma = 0; this.t = 0; this.strength = 0.8; this.fovPunch = 0; this.baseFov = 50; this.reduceMotion = false;
   }
   snap(x, y) { this.fx = x; this.fy = y; }
   addTrauma(a) { this.trauma = Math.min(1, this.trauma + a); }
@@ -23,11 +23,11 @@ export class CameraRig {
     // shake rides on top
     this.t += realDt; this.trauma = Math.max(0, this.trauma - 1.4 * realDt);
     const s = this.trauma * this.trauma * this.strength;
-    const ox = 0.6 * s * noise(this.t * 3, 1), oy = 0.45 * s * noise(this.t * 3, 2), roll = 0.06 * s * noise(this.t * 3, 3);
+    const ox = 0.6 * s * noise(this.t * 3, 1), oy = 0.45 * s * noise(this.t * 3, 2), roll = (this.reduceMotion ? 0 : 0.06) * s * noise(this.t * 3, 3);
     this.camera.position.set(this.fx + ox, this.fy + oy, z);
     this.camera.rotation.set(0, 0, roll);
     this.fovPunch = Math.max(0, this.fovPunch - 3.5 * realDt * (this.fovPunch + 0.2));
-    const fov = this.baseFov + this.fovPunch * 14;
+    const fov = this.baseFov + (this.reduceMotion ? 0 : this.fovPunch * 14);
     if (Math.abs(this.camera.fov - fov) > 0.01) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
   }
 }

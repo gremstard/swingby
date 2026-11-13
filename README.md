@@ -4,6 +4,14 @@
 
 Built with three.js r187 + Vite, no art or audio assets (everything is procedural and synthesized).
 
+## What's in it
+
+- **12 authored levels** with a finish gate and three stars each (clear, spark quota, perihelion quota), unlocked sequentially.
+- **Endless** with a random seed and **Daily** with the shared UTC-date seed.
+- **XP and player level**, 9 comet skins and 6 trails unlocked by level or by total stars. Cosmetics only, never power.
+- **Profile** saved locally and versioned, with settings for shake, flashes, reduce motion and mute.
+- **Feel**: shockwave rings, chromatic kicks, slow-motion supernova deaths coloured by what killed you, escalating combo visuals, synthesized audio.
+
 ## Play
 
 ```bash
