@@ -1,0 +1,9 @@
+{
+  "appId": "com.swingby.game",
+  "appName": "Swingby",
+  "webDir": "dist",
+  "backgroundColor": "#05060c",
+  "ios": { "contentInset": "never", "scrollEnabled": false, "backgroundColor": "#05060c", "preferredContentMode": "mobile" },
+  "android": { "backgroundColor": "#05060c", "allowMixedContent": false },
+  "plugins": { "StatusBar": { "style": "DARK", "overlaysWebView": true } }
+}

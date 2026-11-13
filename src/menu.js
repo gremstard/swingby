@@ -54,6 +54,8 @@ export class Menu {
         ${this.xpBar()}
         ${d.unlocks.length ? `<div class="unl">UNLOCKED: ${d.unlocks.map(u => u.name).join(' · ')}</div>` : ''}
         <div class="btns row2">${d.won && LEVELS[L.id] ? `<button data-a="level" data-id="${L.id + 1}" class="big">NEXT ›</button>` : ''}<button data-a="level" data-id="${L.id}">RETRY</button><button data-a="main">MENU</button></div>`;
+    } else if (screen === 'pause') {
+      r.innerHTML = `<div class="tapzone" data-a="resume"><div class="logo"><h1>SWINGBY</h1><div class="tag">TAP TO RESUME</div></div></div><div class="btns row2 corner"><button data-a="retry">RETRY</button><button data-a="main">MENU</button></div>`;
     } else if (screen === 'dead') {
       const d = data;
       r.innerHTML = `<div class="tapzone" data-a="${d.mode === 'endless' ? 'endless' : 'retry'}"><div class="logo"><h1 class="${d.newBest ? 'win' : ''}">${d.score}</h1><div class="tag">${d.newBest ? 'NEW BEST · ' : 'BEST ' + d.best + ' · '}TAP TO RETRY</div></div><div class="xpmini">+${d.xp} XP</div>
@@ -65,7 +67,7 @@ export class Menu {
   unlocked(L) { return L.id === 1 || !!this.p.levels[L.id - 1]?.completed; }
   onClick(e) {
     const b = e.target.closest('button,.tapzone'); if (!b || b.disabled) return; const a = b.dataset.a; const g = this.game;
-    if (a === 'back') this.back(); else if (a === 'main') { this.stack = []; this.show('main'); }
+    if (a === 'resume') g.resume(); else if (a === 'back') this.back(); else if (a === 'main') { this.stack = []; g.abandon(); this.show('main'); }
     else if (a === 'levels' || a === 'customize' || a === 'settings') this.show(a);
     else if (a === 'endless') g.play('endless'); else if (a === 'daily') g.play('daily'); else if (a === 'retry') g.retry();
     else if (a === 'level') g.play('level', Number(b.dataset.id));

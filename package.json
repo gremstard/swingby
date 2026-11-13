@@ -1,20 +1,34 @@
 {
   "name": "swingby",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.6.0",
   "type": "module",
   "scripts": {
     "dev": "vite --port 5188 --strictPort",
     "build": "vite build",
     "preview": "vite preview --port 5189 --strictPort",
-    "smoke": "node tests/smoke.mjs"
+    "smoke": "node tests/smoke.mjs",
+    "tauri": "tauri",
+    "desktop:build": "tauri build",
+    "mobile:sync": "npm run build && cap sync",
+    "ios:open": "cap open ios",
+    "android:open": "cap open android",
+    "android:apk": "npm run mobile:sync && cd android && ./gradlew assembleDebug"
   },
   "devDependencies": {
+    "@capacitor/assets": "^4.0.0",
+    "@capacitor/cli": "^8.6.2",
+    "@tauri-apps/cli": "^2.12.4",
     "playwright": "^1.65.0",
     "vite": "^8.3.8",
     "vite-plugin-singlefile": "^2.3.4"
   },
   "dependencies": {
+    "@capacitor/android": "^8.6.2",
+    "@capacitor/core": "^8.6.2",
+    "@capacitor/haptics": "^8.0.2",
+    "@capacitor/ios": "^8.6.2",
+    "@capacitor/status-bar": "^8.0.4",
     "three": "^0.187.0"
   }
 }

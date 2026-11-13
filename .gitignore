@@ -1,3 +1,11 @@
 node_modules
 dist
 build/*.zip
+src-tauri/target
+android/.gradle
+android/app/build
+android/build
+ios/App/build
+ios/App/Pods
+ios/App/App/public
+android/app/src/main/assets/public

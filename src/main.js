@@ -17,6 +17,8 @@ import { loadProfile, saveProfile, resetProfile } from './save.js';
 import { LEVELS, endlessProfile, levelFinishY } from './levels.js';
 import { SKINS, TRAILS, runXp, syncUnlocks, levelFromXp } from './progression.js';
 import { Menu } from './menu.js';
+import { initNative, haptic } from './native.js';
+initNative();
 
 // ---------- renderer / scene ----------
 const canvas = document.querySelector('#c');
@@ -92,6 +94,9 @@ const S = { mode: 'endless', level: null, seed: dailySeed(), sectors: new Map(),
   timeScale: 1, hitstop: 0, running: false, elapsed: 0, dead: false, deadAt: 0, won: false, popScale: 1, combo: 1, comboT: 0, bestCombo: 1, sparks: 0, peris: 0, totalSparks: 0, finishY: Infinity, tideMul: 1, shock: 0, glow: 0 };
 const G = { profile: loadProfile(), saveNow() { saveProfile(this.profile); }, resetProfile() { this.profile = resetProfile(); this.applyCosmetics(); this.applySettings(); },
   play(mode, id) { startRun(mode, id); }, retry() { startRun(S.mode, S.level?.id, S.seed); }, applyCosmetics, applySettings,
+  abandon() { S.paused = false; S.running = false; },
+  pause() { if (!S.running || S.paused) return; S.paused = true; S.running = false; menu.show('pause'); },
+  resume() { if (!S.paused) return; S.paused = false; S.running = true; menu.hide(); input.held = false; },
   demo(on) { S.demo = on; world.group.visible = !on; tideMesh.visible = tideEdge.visible = tideGlow.visible = !on; if (on) { S.running = false; trail.reset(comet.x, comet.y); } else { cometMesh.visible = false; } } };
 const menu = new Menu(document.querySelector('#menu'), G);
 
@@ -116,7 +121,7 @@ function startRun(mode, levelId, seed) {
   S.seed = mode === 'level' ? S.level.seed : mode === 'daily' ? dailySeed() : (seed || randomSeed());
   S.tideMul = S.level ? S.level.tide : 1; S.finishY = S.level ? levelFinishY(S.level) : Infinity;
   clearWorld(); comet.reset();
-  Object.assign(S, { tideY: -T.TIDE_START_GAP, tideV: T.TIDE_V0, maxY: 0, score: 0, timeScale: 1, hitstop: 0, running: true, elapsed: 0, dead: false, won: false, combo: 1, comboT: 0, bestCombo: 1, sparks: 0, peris: 0, maxFired: false, demo: false });
+  Object.assign(S, { tideY: -T.TIDE_START_GAP, tideV: T.TIDE_V0, maxY: 0, score: 0, timeScale: 1, hitstop: 0, running: true, elapsed: 0, dead: false, won: false, combo: 1, comboT: 0, bestCombo: 1, sparks: 0, peris: 0, maxFired: false, demo: false, paused: false });
   rig.snap(0, 4); ensureSectors();
   // levels: count every spark up front (finite corridor) for the star goal
   S.totalSparks = 0; if (S.level) { const prev = []; for (let i = 0; i < S.level.sectors; i++) { const sec = S.sectors.get(i) || genSector(S.seed, i, prev, profileFor(i)); S.totalSparks += sec.sparks.length; prev.push(...sec.wells); } }
@@ -141,7 +146,7 @@ function tutorial(dt) {
   }
 }
 function endRun(won) {
-  S.running = false; S.won = won; S.dead = !won; S.deadAt = S.elapsed; hintEl.classList.remove('show'); hintT = 0;
+  S.paused = false; S.running = false; S.won = won; S.dead = !won; S.deadAt = S.elapsed; hintEl.classList.remove('show'); hintT = 0;
   const p = G.profile; const before = levelFromXp(p.xp).lvl;
   p.stats.sparks += S.sparks; p.stats.peris += S.peris; p.stats.height += Math.floor(S.maxY); if (!won) p.stats.deaths++;
   let data;
@@ -190,13 +195,14 @@ function kick(amount) { S.shock = Math.min(1.5, S.shock + amount); }
 applyCosmetics(); applySettings();
 
 input.onKey = (code) => {
-  if (code === 'Escape') { if (S.running) { S.running = false; menu.show('main'); } else if (menu.visible) menu.back(); return; }
+  if (code === 'Escape') { if (S.running) G.pause(); else if (S.paused) G.resume(); else if (menu.visible) menu.back(); return; }
   if (code === 'KeyR' && (S.running || S.dead || S.won)) G.retry();
   if (code === 'KeyN' && S.mode !== 'level' && (S.running || S.dead)) startRun('endless');
   if (code === 'KeyM') { G.profile.settings.mute = audio.toggleMute(); G.saveNow(); }
   if (code === 'KeyD') hud.debug.style.display = hud.debug.style.display === 'none' ? '' : 'none';
 };
-audio.sparkChord = true; window.addEventListener('pointerdown', () => audio.unlock()); window.addEventListener('keydown', () => audio.unlock());
+document.addEventListener('visibilitychange', () => { if (document.hidden) G.pause(); });
+window.addEventListener('pointerdown', () => audio.unlock()); window.addEventListener('keydown', () => audio.unlock());
 hud.debug.style.display = 'none';
 
 // ---------- loop ----------
@@ -283,25 +289,25 @@ function update(realDt) {
 }
 function handle(e) {
   switch (e.type) {
-    case 'latch': rig.addTrauma(0.12); audio.latch(); tweens.add(0.22, (k) => { S.popScale = 1 + (1 - k) * 0.35; }, ease.outBack, 'pop'); particles.burst(comet.x, comet.y, 4, e.well.mesh.material.color, 3, 0.35, 0.35); break;
+    case 'latch': haptic.light(); rig.addTrauma(0.12); audio.latch(); tweens.add(0.22, (k) => { S.popScale = 1 + (1 - k) * 0.35; }, ease.outBack, 'pop'); particles.burst(comet.x, comet.y, 4, e.well.mesh.material.color, 3, 0.35, 0.35); break;
     case 'release':
       audio.release(Math.max(0, (comet.speed - T.CRUISE) / (T.MAX_SPEED - T.CRUISE)));
       tweens.add(0.3, (k) => { S.popScale = 1 + (1 - k) * 0.25; }, ease.outBack, 'pop');
-      if (e.ratio < T.PERI_RATIO) { audio.perihelion(); particles.burst(comet.x, comet.y, 26, 0x8fd3ff, 11, 0.8, 0.7); particles.burst(comet.x, comet.y, 12, 0xffffff, 18, 0.4, 0.4); shock.spawn(comet.x, comet.y, { r: 7, dur: 0.55, color: 0x8fd3ff }); shock.spawn(e.well.x, e.well.y, { r: e.well.r * 3, dur: 0.7, color: e.well.mesh.material.color, opacity: 0.6 }); kick(0.7); flash('rgb(143,211,255)', 120); addCombo(); const pts = T.PERI_SCORE * S.combo; S.score += pts; S.peris++; rig.addTrauma(0.35); rig.punch(1); S.timeScale = 0.05; S.hitstop = Math.max(S.hitstop, T.HITSTOP_PERI); pop(`PERIHELION +${pts}`, comet.x, comet.y, '#8fd3ff'); }
+      if (e.ratio < T.PERI_RATIO) { haptic.success(); audio.perihelion(); particles.burst(comet.x, comet.y, 26, 0x8fd3ff, 11, 0.8, 0.7); particles.burst(comet.x, comet.y, 12, 0xffffff, 18, 0.4, 0.4); shock.spawn(comet.x, comet.y, { r: 7, dur: 0.55, color: 0x8fd3ff }); shock.spawn(e.well.x, e.well.y, { r: e.well.r * 3, dur: 0.7, color: e.well.mesh.material.color, opacity: 0.6 }); kick(0.7); flash('rgb(143,211,255)', 120); addCombo(); const pts = T.PERI_SCORE * S.combo; S.score += pts; S.peris++; rig.addTrauma(0.35); rig.punch(1); S.timeScale = 0.05; S.hitstop = Math.max(S.hitstop, T.HITSTOP_PERI); pop(`PERIHELION +${pts}`, comet.x, comet.y, '#8fd3ff'); }
       break;
-    case 'spark': rig.addTrauma(0.18 + S.combo * 0.02); audio.spark(S.combo); particles.burst(e.x, e.y, 10 + S.combo * 3, 0xffd166, 7 + S.combo, 0.55, 0.55); if (S.combo >= 4) { shock.spawn(e.x, e.y, { r: 2 + S.combo * 0.5, dur: 0.4, color: 0xffd166, opacity: 0.7 }); kick(0.15); } if (S.combo >= T.COMBO_MAX && !S.maxFired) { S.maxFired = true; shock.spawn(e.x, e.y, { r: 9, dur: 0.6, color: 0xff6fa8, opacity: 0.8 }); kick(0.5); flash('rgb(255,111,168)', 100); pop('MAX', e.x, e.y + 1.5, '#ff6fa8', true); } tweens.add(0.25, (k) => { S.popScale = 1 + (1 - k) * 0.4; }, ease.outBack, 'pop'); pop(`+${e.pts}`, e.x, e.y, '#ffd166');
+    case 'spark': haptic.light(); rig.addTrauma(0.18 + S.combo * 0.02); audio.spark(S.combo); particles.burst(e.x, e.y, 10 + S.combo * 3, 0xffd166, 7 + S.combo, 0.55, 0.55); if (S.combo >= 4) { shock.spawn(e.x, e.y, { r: 2 + S.combo * 0.5, dur: 0.4, color: 0xffd166, opacity: 0.7 }); kick(0.15); } if (S.combo >= T.COMBO_MAX && !S.maxFired) { S.maxFired = true; shock.spawn(e.x, e.y, { r: 9, dur: 0.6, color: 0xff6fa8, opacity: 0.8 }); kick(0.5); flash('rgb(255,111,168)', 100); pop('MAX', e.x, e.y + 1.5, '#ff6fa8', true); } tweens.add(0.25, (k) => { S.popScale = 1 + (1 - k) * 0.4; }, ease.outBack, 'pop'); pop(`+${e.pts}`, e.x, e.y, '#ffd166');
       hud.combo.animate([{ transform: 'scale(1.5)' }, { transform: 'scale(1)' }], { duration: 220, easing: 'ease-out' }); break;
-    case 'near': rig.addTrauma(0.3); audio.near(); S.timeScale = 0.3; S.hitstop = Math.max(S.hitstop, T.SLOWMO_NEAR); particles.burst(comet.x, comet.y, 6, e.well.mesh.material.color, 4, 0.4, 0.4); shock.spawn(e.well.x, e.well.y, { r: e.well.r * 1.6, dur: 0.35, color: e.well.mesh.material.color, opacity: 0.5 }); kick(0.35); tweens.add(0.4, (k) => { e.well.mesh.material.emissiveIntensity = 0.28 + (1 - k) * 2.2; }, ease.outCubic, 'wellflash'); break;
+    case 'near': haptic.medium(); rig.addTrauma(0.3); audio.near(); S.timeScale = 0.3; S.hitstop = Math.max(S.hitstop, T.SLOWMO_NEAR); particles.burst(comet.x, comet.y, 6, e.well.mesh.material.color, 4, 0.4, 0.4); shock.spawn(e.well.x, e.well.y, { r: e.well.r * 1.6, dur: 0.35, color: e.well.mesh.material.color, opacity: 0.5 }); kick(0.35); tweens.add(0.4, (k) => { e.well.mesh.material.emissiveIntensity = 0.28 + (1 - k) * 2.2; }, ease.outCubic, 'wellflash'); break;
     case 'death': {
       // supernova: freeze, then a slow-motion blast in the killer's colour, rings, chromatic tear
       const c = comet.cause || ''; const col = c.includes('TIDE') ? 0xb04bff : c.includes('WELL') ? 0xffa040 : c.includes('SINGULARITY') ? 0x9b5cff : c.includes('VOID') ? 0x6080ff : 0xff4060;
       const css = c.includes('TIDE') ? 'rgb(176,75,255)' : c.includes('WELL') ? 'rgb(255,160,64)' : c.includes('VOID') ? 'rgb(96,128,255)' : 'rgb(255,64,96)';
-      rig.addTrauma(1); audio.death(); flash(css, 260); kick(1.5);
+      haptic.error(); rig.addTrauma(1); audio.death(); flash(css, 260); kick(1.5);
       particles.burst(comet.x, comet.y, 90, 0xffffff, 16, 1.2, 0.9); particles.burst(comet.x, comet.y, 120, col, 9, 1.8, 1.1); particles.burst(comet.x, comet.y, 40, skin.trail, 24, 0.6, 0.5);
       shock.spawn(comet.x, comet.y, { r: 14, dur: 0.9, color: 0xffffff }); shock.spawn(comet.x, comet.y, { r: 22, dur: 1.3, color: col, opacity: 0.7 }); shock.spawn(comet.x, comet.y, { r: 5, dur: 0.4, color: 0xffffff });
       tweens.add(0.9, (k) => { bloom.strength = Math.max(bloom.strength, 0.55 + (1 - k) * 1.6); });
       cometMesh.visible = false; S.timeScale = 0.08; S.hitstop = 0.5; endRun(false); break; }
-    case 'win': audio.perihelion(); rig.addTrauma(0.5); rig.punch(1.4); kick(0.9); flash('rgb(255,209,102)', 220);
+    case 'win': haptic.success(); audio.perihelion(); rig.addTrauma(0.5); rig.punch(1.4); kick(0.9); flash('rgb(255,209,102)', 220);
       particles.burst(comet.x, comet.y, 80, 0xffd166, 14, 1.4, 0.9); particles.burst(comet.x, comet.y, 60, 0xffffff, 8, 1.8, 0.7);
       for (let i = 0; i < 4; i++) tweens.add(0.12 * i + 0.01, (k) => { if (k >= 1) shock.spawn(comet.x, comet.y, { r: 10 + i * 6, dur: 0.8 + i * 0.2, color: i % 2 ? 0xffffff : 0xffd166, opacity: 0.8 }); });
       pop('CLEAR', comet.x, comet.y, '#ffd166', true); comet.tether = null; S.timeScale = 0.25; S.hitstop = 0.6; endRun(true); break;
