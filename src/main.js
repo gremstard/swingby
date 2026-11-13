@@ -233,7 +233,7 @@ function aimAssist() {
   const consider = (tx, ty) => { const d = Math.hypot(tx, ty) || 1; const ang = Math.acos(Math.max(-1, Math.min(1, (ux * tx + uy * ty) / d))); if (ang < bd) { bd = ang; best = [tx / d, ty / d]; } };
   for (const s of S.sparks_) if (!s.got && Math.hypot(s.x - comet.x, s.y - comet.y) < T.AIM_ASSIST_RANGE) consider(s.x - comet.x, s.y - comet.y);
   if (S.boss && !S.boss.dead) for (const c of S.boss.cores) if (!c.got) consider(c.x - comet.x, c.y - comet.y);
-  if (!best) consider(0, 1);
+  if (!best) { bd = 24 * Math.PI / 180; consider(0, 1); }
   if (best) { comet.vx = best[0] * sp; comet.vy = best[1] * sp; }
 }
 function kill(cause) {
@@ -287,7 +287,8 @@ function update(realDt) {
       for (const h of S.holes) { h.ring.rotation.z += dt * 2; h.ring.scale.setScalar(h.r * (1.4 + 0.3 * Math.sin(S.elapsed * 4))); if (Math.hypot(h.x - comet.x, h.y - comet.y) < h.r + 0.3) kill('CRUSHED BY A SINGULARITY'); }
     }
     const idx = Math.floor(comet.y / T.SECTOR_H); const hw = halfWidth(idx);
-    if (Math.abs(comet.x) > hw) kill('LOST TO THE VOID');
+    // side walls are bumpers, not death: the Tide is the only thing that ends a run from outside
+    if (!S.mods.wrap && Math.abs(comet.x) > hw - 0.4 && comet.alive) { const sgn = Math.sign(comet.x); if (comet.tether) comet.release(); comet.x = sgn * (hw - 0.45); if (sgn * comet.vx > 0) { comet.vx = -comet.vx * 0.75; comet.vy = Math.max(comet.vy, T.CRUISE * 0.6); comet.speed = Math.max(T.CRUISE * 0.8, comet.speed * 0.85); events.push({ type: 'bounce', x: sgn * hw }); } }
     if (S.boss && !S.boss.dead && Math.abs(comet.y - S.boss.y) < T.SECTOR_H * 0.5) S.tideMul = (S.level?.tide || 1) * 0.35; else S.tideMul = S.level ? S.level.tide : 1;
     S.tideV = (T.TIDE_V0 + Math.max(0, idx) * T.TIDE_V_PER_SECTOR) * S.tideMul;
     const gap = comet.y - S.tideY; const rubber = gap > T.TIDE_MAX_GAP ? (gap - T.TIDE_MAX_GAP) * 0.8 : 0;
@@ -368,6 +369,7 @@ function handle(e) {
       shock.spawn(comet.x, comet.y, { r: 14, dur: 0.9, color: 0xffffff }); shock.spawn(comet.x, comet.y, { r: 22, dur: 1.3, color: col, opacity: 0.7 }); shock.spawn(comet.x, comet.y, { r: 5, dur: 0.4, color: 0xffffff });
       tweens.add(0.9, (k) => { bloom.strength = Math.max(bloom.strength, 0.55 + (1 - k) * 1.6); });
       cometMesh.visible = false; S.timeScale = 0.08; S.hitstop = 0.5; endRun(false); break; }
+    case 'bounce': haptic.medium(); audio.tone(140, 0.14, { type: 'triangle', vol: 0.3, slide: 0.6 }); rig.addTrauma(0.28); kick(0.25); particles.burst(e.x, comet.y, 12, 0x8fb4ff, 6, 0.5, 0.5); shock.spawn(e.x, comet.y, { r: 3, dur: 0.35, color: 0x8fb4ff, opacity: 0.5 }); tweens.add(0.25, (k) => { S.popScale = 1 + (1 - k) * 0.3; }, ease.outBack, 'pop'); break;
     case 'portal': haptic.light(); audio.whoosh(0.3, { from: 300, to: 2400, vol: 0.2 }); shock.spawn(e.from.x, e.from.y, { r: 3, dur: 0.35, color: e.from.col }); shock.spawn(e.to.x, e.to.y, { r: 4, dur: 0.45, color: e.to.col }); kick(0.3); trail.reset(comet.x, comet.y); break;
     case 'shield': haptic.heavy(); audio.near(); shock.spawn(comet.x, comet.y, { r: 6, dur: 0.5, color: 0x8fd3ff }); particles.burst(comet.x, comet.y, 30, 0x8fd3ff, 9, 0.7, 0.6); kick(0.6); flash('rgb(143,211,255)', 140); rig.addTrauma(0.5); S.timeScale = 0.2; S.hitstop = 0.25; pop('SHIELD', comet.x, comet.y + 1, '#8fd3ff', true); break;
     case 'core': haptic.medium(); audio.perihelion(); particles.burst(e.x, e.y, 24, 0xff5ab0, 9, 0.7, 0.6); shock.spawn(e.x, e.y, { r: 5, dur: 0.5, color: 0xff5ab0 }); kick(0.5); rig.addTrauma(0.4); addCombo(); S.score += 40 * S.combo; pop(`CORE ${S.boss.hp}/${S.boss.coresTotal}`, e.x, e.y, '#ff5ab0', true);
