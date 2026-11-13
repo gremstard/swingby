@@ -9,3 +9,7 @@ ios/App/build
 ios/App/Pods
 ios/App/App/public
 android/app/src/main/assets/public
+android/local.properties
+build/*.apk
+build/*.aab
+build/*.app.zip
