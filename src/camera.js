@@ -16,7 +16,10 @@ export class CameraRig {
     const ty = comet.y + 4 + comet.vy * T.LOOK_AHEAD;
     const k = 1 - Math.exp(-T.CAM_FOLLOW * realDt);
     this.fx += (tx - this.fx) * k; this.fy += (ty - this.fy) * k;
-    const z = T.CAM_Z + (comet.speed - T.CRUISE) * T.CAM_SPEED_ZOOM;
+    // portrait screens pull back so the whole corridor (±13.5) stays in view
+    const halfTan = Math.tan(this.baseFov * 0.5 * Math.PI / 180);
+    const zFit = 13.5 / (halfTan * Math.max(0.3, this.camera.aspect));
+    const z = Math.max(T.CAM_Z, zFit) + (comet.speed - T.CRUISE) * T.CAM_SPEED_ZOOM;
     // shake rides on top
     this.t += realDt; this.trauma = Math.max(0, this.trauma - 1.4 * realDt);
     const s = this.trauma * this.trauma * this.strength;

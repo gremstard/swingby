@@ -11,7 +11,8 @@ page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 await page.goto(url);
 await page.waitForFunction(() => window.renderer?.info.render.calls > 0, null, { timeout: 20000 });
 await page.waitForTimeout(600);
-await page.screenshot({ path: `${out}/01-start.png` });
+await page.screenshot({ path: `${out}/01-title.png` });
+await page.keyboard.press('Space'); await page.waitForTimeout(200);
 // bot: runs IN PAGE each frame (no Playwright latency). Policy: grab the nearest well; release when
 // velocity points at a spark ahead (±22°) or, failing that, roughly up and not toward a wall.
 await page.evaluate(() => {
@@ -51,7 +52,14 @@ await page.waitForTimeout(400);
 await page.screenshot({ path: `${out}/04-death.png` });
 await page.keyboard.press('KeyR'); await page.waitForTimeout(300);
 const restarted = await page.evaluate(() => window.S.running && window.comet.alive && window.S.timeScale === 1);
+// mobile viewport: title + a second of play, touch input
+const m = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+await m.goto(url); await m.waitForFunction(() => window.renderer?.info.render.calls > 0, null, { timeout: 20000 }); await m.waitForTimeout(300);
+await m.screenshot({ path: `${out}/05-mobile-title.png` });
+await m.touchscreen.tap(195, 500); await m.waitForTimeout(900);
+const mobileRunning = await m.evaluate(() => window.S.running && window.comet.y > 2);
+await m.screenshot({ path: `${out}/06-mobile-play.png` });
 await browser.close();
-const report = { ...final, latches, releases, restarted, errors };
+const report = { ...final, latches, releases, restarted, mobileRunning, errors };
 console.log(JSON.stringify(report, null, 2));
-process.exit(errors.length || !restarted ? 1 : 0);
+process.exit(errors.length || !restarted || !mobileRunning ? 1 : 0);

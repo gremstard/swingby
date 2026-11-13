@@ -57,3 +57,6 @@ Multiplayer, saves beyond best score, mobile layout polish, menus beyond title/d
 
 ## Keep / kill signal (prototype-fast skill)
 KEEP if a cold player releases on purpose toward a spark within 30 s and immediately presses R after dying. KILL if orbiting feels like waiting.
+
+## Status (2026-11-12)
+All four milestones built and tagged (M1..M4, zips in `/build`). Headless bot playtest passes: zero console errors, full loop (latch, release, spark, combo, death, restart) exercised, touch path verified at 390×844. The keep/kill call still needs a human playtest: play 3 runs, report whether you released toward a spark on purpose within 30 s and whether you pressed R without thinking.

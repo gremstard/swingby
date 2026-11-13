@@ -66,7 +66,7 @@ export class Trail {
       let dx = px - nx, dy = py - ny; const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
       const k = 1 - i / this.n; const w = this.width * k * (0.6 + 0.6 * speedK);
       pos.set([px - dy * w, py + dx * w, -0.02, px + dy * w, py - dx * w, -0.02], i * 6);
-      const a = k * k * (0.5 + 0.7 * speedK);
+      const a = k * k * k * k * (0.5 + 0.7 * speedK);
       col.set([this.color.r * a, this.color.g * a, this.color.b * a, this.color.r * a, this.color.g * a, this.color.b * a], i * 6);
     }
     this.mesh.geometry.attributes.position.needsUpdate = true; this.mesh.geometry.attributes.color.needsUpdate = true;

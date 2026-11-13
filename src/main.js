@@ -96,7 +96,7 @@ function die() {
   hud.card.classList.remove('hidden');
 }
 input.onKey = (code) => {
-  if (code === 'KeyR') start(S.seed); if (code === 'KeyN') start(randomSeed());
+  if (code === 'KeyR') { S.title = false; start(S.seed); } if (code === 'KeyN') { S.title = false; start(randomSeed()); }
   if (code === 'KeyM') audio.toggleMute();
   if (code === 'KeyS') { opts.shake = !opts.shake; localStorage.setItem('peri.shake', opts.shake ? '1' : '0'); rig.strength = opts.shake ? 0.8 : 0; }
   if (code === 'KeyF') { opts.flash = !opts.flash; localStorage.setItem('peri.flash', opts.flash ? '1' : '0'); }
@@ -111,6 +111,7 @@ function update(realDt) {
   if (S.hitstop > 0) { S.hitstop -= realDt; if (S.hitstop <= 0) S.timeScale = 1; }
   const dt = realDt * S.timeScale;
   const inp = input.consume();
+  if (S.title && inp.pressed) { S.title = false; start(S.seed); input.held = false; }
   if (S.dead && (inp.pressed) && S.elapsed - S.deadAt > 0.6) start(S.seed);
   S.elapsed += realDt;
   if (S.running) {
@@ -184,5 +185,18 @@ function handle(e) {
 }
 renderer.setAnimationLoop(() => { timer.update(); const dt = Math.min(Math.max(timer.getDelta(), 0), 0.05); update(dt); composer.render(); });
 window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); composer.setSize(window.innerWidth, window.innerHeight); });
-start(S.seed);
+function title() {
+  S.running = false; S.dead = false; S.title = true;
+  hud.card.innerHTML = `<h1>PERIHELION</h1><div class="sub">HOLD TO ORBIT &nbsp;·&nbsp; RELEASE TO FLY</div>
+  <div class="hint">The tighter the orbit, the faster you go.<br>Touch a well and you burn. Fall behind the Tide and you drown.<br><br>
+  <kbd>SPACE</kbd> / <kbd>CLICK</kbd> / <kbd>TOUCH</kbd> &nbsp; hold to tether<br>
+  <kbd>R</kbd> retry seed &nbsp; <kbd>N</kbd> new seed &nbsp; <kbd>M</kbd> mute &nbsp; <kbd>S</kbd> shake &nbsp; <kbd>F</kbd> flash<br><br>
+  <span style="opacity:.6">daily seed ${S.seed}${S.best ? ' · best ' + S.best : ''}</span></div>`;
+  hud.card.classList.remove('hidden');
+}
+hud.debug.style.display = 'none';
+const _onKey = input.onKey; input.onKey = (code) => { if (code === 'KeyD') hud.debug.style.display = hud.debug.style.display === 'none' ? '' : 'none'; _onKey(code); };
+// pre-generate so the title shows the world behind it
+for (const i of [...S.sectors.keys()]) world.remove(i); S.sectors.clear(); comet.reset(); rig.snap(0, 4); ensureSectors(); trail.reset(0, 0);
+title();
 Object.assign(window, { renderer, scene, camera, S, comet, start, input, T, halfWidthAt, audio, opts });
