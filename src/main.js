@@ -227,14 +227,17 @@ const timer = new THREE.Timer(); timer.connect(document);
 const events = [];
 function addCombo() { S.combo = Math.min(T.COMBO_MAX, S.combo + 1); S.comboT = T.COMBO_WINDOW; S.bestCombo = Math.max(S.bestCombo, S.combo); }
 // Nudge the release direction toward a nearby spark (or straight up) when it's already close. Never more than a few degrees.
-function aimAssist() {
+function aimAssist(well) {
   const sp = Math.hypot(comet.vx, comet.vy) || 1; let ux = comet.vx / sp, uy = comet.vy / sp; const lim = T.AIM_ASSIST_DEG * Math.PI / 180;
   let best = null, bd = lim;
   const consider = (tx, ty) => { const d = Math.hypot(tx, ty) || 1; const ang = Math.acos(Math.max(-1, Math.min(1, (ux * tx + uy * ty) / d))); if (ang < bd) { bd = ang; best = [tx / d, ty / d]; } };
   for (const s of S.sparks_) if (!s.got && Math.hypot(s.x - comet.x, s.y - comet.y) < T.AIM_ASSIST_RANGE) consider(s.x - comet.x, s.y - comet.y);
   if (S.boss && !S.boss.dead) for (const c of S.boss.cores) if (!c.got) consider(c.x - comet.x, c.y - comet.y);
   if (!best) { bd = 24 * Math.PI / 180; consider(0, 1); }
-  if (best) { comet.vx = best[0] * sp; comet.vy = best[1] * sp; }
+  if (!best) return;
+  // never bend a release into the well we just left: the tangent is always safe, the assisted line must still point outward
+  if (well) { const rx = comet.x - well.x, ry = comet.y - well.y; const rl = Math.hypot(rx, ry) || 1; if ((best[0] * rx + best[1] * ry) / rl < 0.08) return; }
+  comet.vx = best[0] * sp; comet.vy = best[1] * sp;
 }
 function kill(cause) {
   if (!comet.alive || S.invuln > 0) return;
@@ -257,7 +260,7 @@ function update(realDt) {
     tutorial(dt);
     comet.wantTether = inp.held;
     if (inp.pressed && !comet.tether) { const w = comet.nearestReachable(S.wells); if (w) { comet.latch(w); events.push({ type: 'latch', well: w }); } }
-    if (inp.released && comet.tether) { const r = comet.release(); aimAssist(); events.push({ type: 'release', ...r }); }
+    if (inp.released && comet.tether) { const r = comet.release(); aimAssist(r.well); events.push({ type: 'release', ...r }); }
     if (S.invuln > 0) S.invuln -= dt; S.gameT += dt; world.update(dt, S.gameT); if (S.portalCd > 0) S.portalCd -= dt;
     if (S.mods.gravity && !comet.tether) { comet.vx += S.mods.gravity * dt; const sp = Math.hypot(comet.vx, comet.vy) || 1; comet.vx *= comet.speed / sp; comet.vy *= comet.speed / sp; }
     comet.step(dt, S.wells, events, S.holes);
@@ -288,7 +291,7 @@ function update(realDt) {
     }
     const idx = Math.floor(comet.y / T.SECTOR_H); const hw = halfWidth(idx);
     // side walls are bumpers, not death: the Tide is the only thing that ends a run from outside
-    if (!S.mods.wrap && Math.abs(comet.x) > hw - 0.4 && comet.alive) { const sgn = Math.sign(comet.x); if (comet.tether) comet.release(); comet.x = sgn * (hw - 0.45); if (sgn * comet.vx > 0) { comet.vx = -comet.vx * 0.75; comet.vy = Math.max(comet.vy, T.CRUISE * 0.6); comet.speed = Math.max(T.CRUISE * 0.8, comet.speed * 0.85); events.push({ type: 'bounce', x: sgn * hw }); } }
+    if (!S.mods.wrap && Math.abs(comet.x) > hw - 0.4 && comet.alive) { const sgn = Math.sign(comet.x); if (comet.tether) comet.release(); comet.x = sgn * (hw - 0.45); if (sgn * comet.vx > 0) { comet.speed = Math.max(T.CRUISE * 0.8, comet.speed * 0.85); comet.vx = -Math.abs(comet.vx) * sgn * 0.35; comet.vy = Math.max(Math.abs(comet.vy), comet.speed * 0.9); events.push({ type: 'bounce', x: sgn * hw }); } } // bounce is mostly upward: it must not throw you back into the well you just left
     if (S.boss && !S.boss.dead && Math.abs(comet.y - S.boss.y) < T.SECTOR_H * 0.5) S.tideMul = (S.level?.tide || 1) * 0.35; else S.tideMul = S.level ? S.level.tide : 1;
     S.tideV = (T.TIDE_V0 + Math.max(0, idx) * T.TIDE_V_PER_SECTOR) * S.tideMul;
     const gap = comet.y - S.tideY; const rubber = gap > T.TIDE_MAX_GAP ? (gap - T.TIDE_MAX_GAP) * 0.8 : 0;

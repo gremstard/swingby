@@ -71,7 +71,7 @@ const bossRes = await page.evaluate(async () => {
   const b = window.S.sectors.get(2)?.boss; if (!b) return { boss: false };
   window.S.boss = b; window.S.invuln = 999; window.comet.y = b.y - 12; window.S.tideY = window.comet.y - 25;
   await new Promise(r => setTimeout(r, 400));
-  for (const c of b.cores) { if (!c.got) { window.comet.x = c.x; window.comet.y = c.y; window.S.tideY = window.comet.y - 25; await new Promise(r => setTimeout(r, 1500)); } }
+  for (const c of b.cores) { const t0 = Date.now(); while (!c.got && Date.now() - t0 < 6000) { window.comet.x = c.x; window.comet.y = c.y; window.comet.vx = 0; window.comet.vy = 0.1; window.S.tideY = window.comet.y - 25; await new Promise(r => setTimeout(r, 250)); } }
   await new Promise(r => setTimeout(r, 800));
   return { boss: true, hp: b.hp, total: b.coresTotal, dead: !!b.dead, alive: window.comet.alive, running: window.S.running };
 });
