@@ -103,9 +103,10 @@ export class WorldView {
       const ring2 = new THREE.Mesh(this.ringGeo, new THREE.MeshBasicMaterial({ color: 0xb04bff, transparent: true, opacity: 0.12, side: THREE.DoubleSide })); ring2.position.set(h.x, h.y, -0.06); ring2.scale.setScalar(6); g.add(ring2);
     }
     // void walls
-    const wallGeo = new THREE.PlaneGeometry(40, T.SECTOR_H);
-    const l = new THREE.Mesh(wallGeo, this.wallMat); l.position.set(-sector.halfW - 20, sector.y0 + T.SECTOR_H / 2, -0.2); g.add(l);
-    const r = new THREE.Mesh(wallGeo, this.wallMat); r.position.set(sector.halfW + 20, sector.y0 + T.SECTOR_H / 2, -0.2); g.add(r);
+    const extra = sector.idx === 0 ? 80 : 0; // first sector's walls also cover the space below the start
+    const wallGeo = new THREE.PlaneGeometry(40, T.SECTOR_H + extra);
+    const l = new THREE.Mesh(wallGeo, this.wallMat); l.position.set(-sector.halfW - 20, sector.y0 - extra / 2 + T.SECTOR_H / 2, -0.2); g.add(l);
+    const r = new THREE.Mesh(wallGeo, this.wallMat); r.position.set(sector.halfW + 20, sector.y0 - extra / 2 + T.SECTOR_H / 2, -0.2); g.add(r);
     this.group.add(g);
     this.sectors.set(sector.idx, g);
   }
